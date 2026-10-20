@@ -143,6 +143,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         conn.execute(statement)
     _migrate_result_items_status(conn)
+    from src.infrastructure.persistence.opportunity_schema import init_opportunity_schema
+    init_opportunity_schema(conn)
     conn.commit()
 
 

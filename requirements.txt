@@ -16,3 +16,4 @@ qrcode
 pytest
 pytest-asyncio
 coverage
+tzdata; sys_platform == "win32"
