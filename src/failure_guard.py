@@ -92,21 +92,23 @@ class _FileLock:
         self._fh = fh
 
     def __enter__(self):
-        try:
+        if os.name == 'nt':
+            import msvcrt
+            self._fh.seek(0)
+            msvcrt.locking(self._fh.fileno(), msvcrt.LK_LOCK, 1)
+        else:
             import fcntl
-
             fcntl.flock(self._fh.fileno(), fcntl.LOCK_EX)
-        except Exception:
-            pass
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        try:
+        if os.name == 'nt':
+            import msvcrt
+            self._fh.seek(0)
+            msvcrt.locking(self._fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
             import fcntl
-
             fcntl.flock(self._fh.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
         return False
 
 
@@ -188,7 +190,12 @@ class FailureGuard:
 
     def _update_task(self, task_key: str, updater) -> dict:
         _ensure_parent_dir(self.path)
-        with open(self.path, "a+", encoding="utf-8") as fh:
+        # A stable sidecar lock allows atomic replacement of the data file on
+        # Windows and keeps all processes locking the same inode on POSIX.
+        with open(self.path + ".lock", "a+b") as fh:
+            if os.fstat(fh.fileno()).st_size == 0:
+                fh.write(b"\0")
+                fh.flush()
             with _FileLock(fh):
                 fh.seek(0)
                 data = self._load()

@@ -15,3 +15,6 @@ prompts/
 .serena/
 price_history/
 data/
+.venv/
+.test-runs/
+*-pytest.log
