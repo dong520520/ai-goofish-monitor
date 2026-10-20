@@ -45,6 +45,7 @@ RUN apt-get update \
 COPY --from=frontend-builder /dist /app/dist
 
 COPY src /app/src
+# Includes offline synthetic radar fixtures in src/resources; no Cookie required.
 COPY spider_v2.py /app/spider_v2.py
 COPY prompts /app/prompts
 COPY static /app/static

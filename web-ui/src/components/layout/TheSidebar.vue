@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { 
   LayoutDashboard, 
+  Radar,
   ListTodo, 
   Users, 
   Layers, 
@@ -20,6 +21,7 @@ const { isConnected } = useWebSocket()
 const { t } = useI18n()
 
 const navItems = computed(() => [
+  { to: '/opportunities', label: t('routes.opportunities'), icon: Radar },
   { to: '/dashboard', label: t('sidebar.dashboard'), icon: LayoutDashboard },
   { to: '/tasks', label: t('sidebar.tasks'), icon: ListTodo },
   { to: '/accounts', label: t('sidebar.accounts'), icon: Users },

@@ -23,6 +23,7 @@ export function useAuth() {
   }
 
   function logout() {
+    void fetch('/auth/logout', { method: 'POST' }).catch(() => {})
     username.value = null
     isLoggedIn.value = false
     localStorage.removeItem('auth_username')

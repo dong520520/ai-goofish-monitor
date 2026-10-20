@@ -17,6 +17,12 @@ const routes = [
     redirect: '/dashboard',
     children: [
       {
+        path: 'opportunities',
+        name: 'Opportunities',
+        component: () => import('@/views/OpportunitiesView.vue'),
+        meta: { titleKey: 'routes.opportunities', requiresAuth: true },
+      },
+      {
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/DashboardView.vue'),

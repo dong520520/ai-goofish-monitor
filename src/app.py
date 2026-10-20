@@ -17,6 +17,7 @@ from src.api.routes import (
     login_state,
     websocket,
     accounts,
+    opportunities,
 )
 from src.api.dependencies import (
     set_process_service,
@@ -112,6 +113,7 @@ app.include_router(results.router)
 app.include_router(login_state.router)
 app.include_router(websocket.router)
 app.include_router(accounts.router)
+app.include_router(opportunities.router)
 
 # 挂载静态文件
 # 旧的静态文件目录（用于截图等）
@@ -133,7 +135,7 @@ async def health_check():
 
 # 认证状态检查端点
 from fastapi import Request, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 class LoginRequest(BaseModel):
@@ -142,11 +144,20 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/auth/status")
-async def auth_status(payload: LoginRequest):
+async def auth_status(payload: LoginRequest, request: Request, response: Response):
     """检查认证状态"""
     if payload.username == app_settings.web_username and payload.password == app_settings.web_password:
+        from src.api.opportunity_auth import set_login_cookie
+        set_login_cookie(response, request)
         return {"authenticated": True, "username": payload.username}
     raise HTTPException(status_code=401, detail="认证失败")
+
+
+@app.post("/auth/logout")
+async def logout(response: Response):
+    from src.api.opportunity_auth import COOKIE_NAME
+    response.delete_cookie(COOKIE_NAME, path="/api/opportunities")
+    return {"authenticated": False}
 
 
 # 主页路由 - 服务 Vue 3 SPA

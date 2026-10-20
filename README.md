@@ -4,6 +4,25 @@
 
 基于 Playwright 和 AI 的闲鱼多任务实时监控，提供完整的 Web 管理界面。
 
+## 2026 闲鱼商机雷达（P0）
+
+在原有采集器、FastAPI、Vue 3、SQLite 和调度器上增量增加选品工作台。
+已实现 **CSV / 已有监控快照 → SQLite → 身份去重 → 四种规则评分 → API → Vue 排行榜 → 成本编辑与候选池**。
+本阶段无需闲鱼 Cookie、AI Key 或真实联网采集即可使用。P0 采用可解释规则；原有 AI 分析功能继续保留。
+
+1. 安装依赖 `python -m pip install -r requirements.txt`，执行 `cd web-ui && npm ci && npm run build`。
+2. 回到根目录运行 `python -m uvicorn src.app:app --host 127.0.0.1 --port 8000`。
+3. 打开 `http://127.0.0.1:8000/opportunities`，使用原有 Web 账号登录（默认 `admin/admin123`）。Windows 也可运行 `start-radar.ps1`。
+4. 点击“载入合成演示”，或上传 [样例 CSV](src/resources/opportunity_demo.csv)。样例含 **40 件合成商品、1 个重复行、1 个异常行**，异常行会明确报告，不会入库。
+5. 切换实物、合规虚拟、低买高卖、蓝海模式；设置类目、关键词、最低净利率与可信度。点商品查看依据，补充成本后重新评分，再纳入候选池。
+
+评分表示待验证机会，可信度独立显示。未知成本保持空值，报价/想要/浏览均不等于真实成交，合成样例可信度最高 20 分。
+“类目与发现”支持维护一级/二级类目、种子词、离线扩词和有上限的人工发现队列；不会自动采集或发布。
+
+**完整说明：** [导入格式、评分规则、API、验证记录和限制](docs/OPPORTUNITY_P0.md)。已有安装升级后需重新登录一次，以取得新 API 的 HttpOnly Cookie。
+
+![选品雷达合成样例排行榜](docs/screenshots/opportunity-ranking.jpg)
+
 
 ## 核心特性
 

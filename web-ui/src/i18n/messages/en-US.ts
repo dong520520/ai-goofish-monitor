@@ -10,6 +10,7 @@ const enUS = {
     en: 'English',
   },
   routes: {
+    opportunities: 'Opportunity Radar',
     login: 'Login',
     dashboard: 'Dashboard',
     tasks: 'Tasks',
