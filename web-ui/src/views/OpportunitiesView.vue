@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import OpportunityHistoryPanel from '@/components/results/OpportunityHistoryPanel.vue'
 import OpportunityMonitorPanel from '@/components/results/OpportunityMonitorPanel.vue'
+import OpportunityResearchPanel from '@/components/results/OpportunityResearchPanel.vue'
 
 const modes: { key: Strategy; label: string; note: string }[] = [
   { key: 'physical', label: '实物选品', note: '采购、运费、履约与售后' },
@@ -21,6 +22,7 @@ const filters = reactive<RadarFilters>({ strategy: 'physical', category: '', q: 
 const items = ref<Opportunity[]>([]), categories = ref<Category[]>([]), keywords = ref<Keyword[]>([])
 const total = ref(0), page = ref(1), busy = ref(false), loading = ref(false), error = ref(''), message = ref('')
 const report = ref<ImportReport | null>(null), selected = ref<Opportunity | null>(null)
+const researchRevision = ref(0)
 const detailOpen = ref(false), configOpen = ref(false), costDraft = ref<Record<string, string | null>>({})
 const config = reactive<Category>({ name: '', parent: null, keywords: [] })
 const seedText = ref(''), breadth = ref(40), budget = ref(10), queueSize = ref(0)
@@ -45,7 +47,7 @@ async function act(action: () => Promise<unknown>) {
   try { await action() } catch (e) { error.value = (e as Error).message } finally { busy.value = false }
 }
 async function imported(action: () => Promise<ImportReport>) {
-  await act(async () => { report.value = await action(); await load(true) })
+  await act(async () => { report.value = await action(); researchRevision.value++; await load(true) })
 }
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
@@ -115,7 +117,7 @@ onMounted(async () => {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P1</p>
+        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P2</p>
         <h1 class="mt-2 flex items-center gap-2 text-3xl font-bold tracking-tight text-slate-900"><Radar class="h-7 w-7 text-teal-600" />选品雷达</h1>
         <p class="mt-2 text-sm text-slate-500">从商品观测发现方向，用证据决定下一步。</p>
       </div>
@@ -132,6 +134,7 @@ onMounted(async () => {
       <strong>本地证据工作台</strong> · 无需闲鱼 Cookie 或 AI Key。想要数、浏览量与报价均不代表真实销量或成交价；利润来自你填写的成本假设。演示数据明确标识为合成样例。
     </div>
     <OpportunityMonitorPanel @updated="load()" @open-item="id => openItem({ id })" />
+    <OpportunityResearchPanel :categories="categories" :revision="researchRevision" @inspect="(category, keyword, scope) => { filters.category = category; filters.q = keyword; filters.source_scope = scope; load(true) }" />
     <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ message }}</p>
     <div v-if="report" role="status" class="rounded-lg border bg-white p-4 text-sm">

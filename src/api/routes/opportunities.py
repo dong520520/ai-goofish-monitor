@@ -160,6 +160,24 @@ def export(options: dict = Depends(filters), service=Depends(get_service)):
     return Response(export_csv(result), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="opportunities.csv"'})
 
 
+def research_filters(category: str = Query("", max_length=100), keyword: str = Query("", max_length=200),
+                     source_scope: Literal["imported", "demo", "all"] = "imported"):
+    return dict(category=category, keyword=keyword, source_scope=source_scope)
+
+
+@router.get("/research")
+def research(options: dict = Depends(research_filters), limit: int = Query(100, ge=1, le=100), service=Depends(get_service)):
+    from src.services.opportunity_research_service import OpportunityResearchService
+    return OpportunityResearchService(service.repository).evidence(**options, limit=limit)
+
+
+@router.get("/research/export")
+def research_export(options: dict = Depends(research_filters), service=Depends(get_service)):
+    from src.services.opportunity_research_service import OpportunityResearchService
+    return Response(OpportunityResearchService(service.repository).export(**options), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="market-evidence.csv"'})
+
+
 @router.get("/{item_id}")
 def detail(item_id: int, strategy: Strategy = "physical", service=Depends(get_service)):
     service.rescore_all(strategy)

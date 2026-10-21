@@ -49,6 +49,12 @@ class OpportunityRepository:
 
     @staticmethod
     def add_keyword(conn, category, keyword, origin):
+        from src.domain.opportunity_market import normalize_keyword
+        keyword = " ".join(keyword.split())[:80]
+        normalized = normalize_keyword(keyword)
+        if not normalized or any(normalize_keyword(r[0]) == normalized for r in conn.execute(
+                "SELECT keyword FROM keyword_seeds WHERE category=?", (category,))):
+            return
         if conn.execute("SELECT COUNT(*) FROM keyword_seeds").fetchone()[0] >= 5000:
             return
         conn.execute("INSERT OR IGNORE INTO keyword_seeds(category,keyword,origin,discovered_at) VALUES (?,?,?,?)",

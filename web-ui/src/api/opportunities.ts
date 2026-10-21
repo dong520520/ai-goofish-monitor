@@ -2,6 +2,16 @@ import { http } from '@/lib/http'
 
 export type Strategy = 'physical' | 'virtual' | 'resale' | 'blue_ocean'
 export interface Category { name: string; parent: string | null; keywords: string[] }
+export interface MarketCohort {
+  source: string; category: string; currency: string; condition: string | null; model: string | null; sku: string | null; specification: string | null
+  sample_count: number; priced_count: number; distinct_sellers: number | null; p25: string | null; p50: string | null; p75: string | null
+  want_coverage: number; view_coverage: number; confidence_score: number; missing: string[]; item_ids: number[]; is_demo: boolean
+}
+export interface MarketEvidence {
+  cohorts: MarketCohort[]; total_cohorts: number; truncated: boolean; note: string
+  category_coverage: { category: string; sample_count: number }[]
+  lineage: { id: number; keyword: string; origin: string; category: string; matched_count: number; item_ids: number[] }[]
+}
 export interface Keyword { id: number; keyword: string; category: string; origin: string; discovered_at: string }
 export interface OpportunityScore {
   score_total: number; confidence_score: number; strategy: Strategy; is_demo: boolean
@@ -48,6 +58,8 @@ export interface SellerItem {
 const base = '/api/opportunities'
 const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 export const radarApi = {
+  research: (category = '', keyword = '', source_scope = 'imported'): Promise<MarketEvidence> => http(`${base}/research`, { params: { category, keyword, source_scope } }),
+  researchExportUrl: (category: string, keyword: string, source_scope: string) => `${base}/research/export?${new URLSearchParams({ category, keyword, source_scope })}`,
   history: (id: number): Promise<ObservationHistory> => http(`${base}/${id}/history`),
   syncStatus: (): Promise<SyncStatus> => http(`${base}/sync`),
   configureSync: (enabled: boolean): Promise<SyncStatus> => http(`${base}/sync`, json('PUT', { enabled })),

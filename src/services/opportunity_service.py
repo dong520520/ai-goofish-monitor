@@ -209,20 +209,45 @@ class OpportunityService:
                 "SELECT * FROM opportunity_imports ORDER BY id DESC LIMIT 50")]
 
     def queue(self, request=None):
+        from src.domain.opportunity_market import normalize_keyword
+        import hashlib
         with self.repository.transaction() as conn:
             if request:
+                # Persisted fingerprint makes identical planning requests replay-safe.
+                # New/edited keyword configuration permits another bounded plan.
+                all_seeds = conn.execute("SELECT k.* FROM keyword_seeds k JOIN categories c ON c.name=k.category ORDER BY k.id LIMIT 5000").fetchall()
+                active = {c["name"]: {normalize_keyword(k) for k in c["keywords"]} for c in self.repository.categories()}
+                all_seeds = [k for k in all_seeds if k["origin"] not in ('default_seed','user_seed') or normalize_keyword(k["keyword"]) in active[k["category"]]]
+                fingerprint = hashlib.sha256(json_text([[(k["id"],k["keyword"]) for k in all_seeds],request.model_dump()]).encode()).hexdigest()
+                planned = conn.execute("SELECT 1 FROM app_metadata WHERE key=?", ("opportunity_plan:"+fingerprint,)).fetchone()
                 pending = conn.execute("SELECT COUNT(*) FROM discovery_jobs WHERE status='pending_manual'").fetchone()[0]
-                slots = min(request.budget, max(0, 200-pending))
+                slots = 0 if planned else min(request.budget, max(0, 200-pending))
                 breadth = round(slots * request.breadth_ratio)
-                for lane, count, seed_clause in (("breadth", breadth, "IN"), ("depth", slots-breadth, "NOT IN")):
-                    seeds = conn.execute(f"""SELECT k.id FROM keyword_seeds k WHERE k.origin {seed_clause} ('default_seed','user_seed')
-                        AND k.id NOT IN (SELECT keyword_id FROM discovery_jobs) ORDER BY k.id LIMIT ?""", (count,)).fetchall()
-                    for seed in seeds:
+                queued = {r[0] for r in conn.execute("SELECT keyword_id FROM discovery_jobs")}
+                counts = defaultdict(int)
+                queued_words = set()
+                for row in conn.execute("SELECT k.category,k.keyword FROM discovery_jobs j JOIN keyword_seeds k ON k.id=j.keyword_id"):
+                    counts[row["category"]] += 1
+                    queued_words.add((row["category"], normalize_keyword(row["keyword"])))
+                available = [k for k in all_seeds if k["id"] not in queued and (k["category"],normalize_keyword(k["keyword"])) not in queued_words]
+                for lane, count in (("breadth", breadth), ("depth", slots-breadth)):
+                    for _ in range(count):
+                        choices = [k for k in available if (k["origin"] in ('default_seed','user_seed')) == (lane == "breadth")]
+                        if not choices:
+                            break  # Preserve configured lane quotas; never silently change 40/60.
+                        seed = min(choices, key=lambda k: (counts[k["category"]], k["id"]))
                         conn.execute("INSERT OR IGNORE INTO discovery_jobs(keyword_id,lane,created_at) VALUES (?,?,?)", (seed["id"], lane, datetime.now(timezone.utc).isoformat()))
+                        counts[seed["category"]] += 1
+                        available = [k for k in available if (k["category"],normalize_keyword(k["keyword"])) != (seed["category"],normalize_keyword(seed["keyword"]))]
+                if not planned:
+                    # At most one receipt per actual plan; zero-capacity requests can be retried.
+                    if slots:
+                        conn.execute("INSERT OR REPLACE INTO app_metadata VALUES (?,?)", ("opportunity_plan:"+fingerprint,"done"))
                 conn.execute("INSERT OR REPLACE INTO app_metadata VALUES ('opportunity_discovery_ratio',?)", (str(request.breadth_ratio),))
             ratio = conn.execute("SELECT value FROM app_metadata WHERE key='opportunity_discovery_ratio'").fetchone()
-            jobs = [dict(r) for r in conn.execute("SELECT j.*,k.keyword,k.category FROM discovery_jobs j JOIN keyword_seeds k ON k.id=j.keyword_id ORDER BY j.id DESC LIMIT 200")]
+            jobs = [dict(r) for r in conn.execute("SELECT j.*,k.keyword,k.category,k.origin FROM discovery_jobs j JOIN keyword_seeds k ON k.id=j.keyword_id ORDER BY j.id DESC LIMIT 200")]
             return {"jobs": jobs, "breadth_ratio": float(ratio[0]) if ratio else .4,
+                    "category_coverage": sorted({j["category"] for j in jobs}),
                     "external_calls": 0, "note": "仅人工待办队列；执行器未启用，无外部请求。默认广度40%/深挖60%。"}
 
 

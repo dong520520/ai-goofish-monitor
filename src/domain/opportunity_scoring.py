@@ -120,5 +120,8 @@ def score_opportunity(item: OpportunityItem, costs: CostAssumptions, strategy: s
         "dimensions": {k: {"score": round(v, 2), "weight": weights[k], "evidence": evidence[k]} for k, v in dimensions.items()},
         "profit": profit, "market": market, "missing": sorted(set(missing)), "warnings": warnings,
         "blockers": blockers, "recommendation": recommendation, "is_demo": demo,
+        "ranking_evidence": {"why_selected": ["六维评分用于安排人工验证顺序", f"本地同来源同币种类目样本 {sample} 件"],
+            "why_rejected": blockers, "provenance": {"source": item.source, "source_item_id": item.source_item_id,
+            "observed_at": item.observed_at.isoformat()}, "market_evidence_separate": True},
         "confidence_basis": {"source_confidence": item.source_confidence, "coverage": round(sum(coverage_fields)/len(coverage_fields), 3), "freshness_factor": freshness},
         "scoring_version": "p0-rules-v1", "scored_at": now.isoformat()}
