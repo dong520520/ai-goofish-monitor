@@ -119,15 +119,20 @@ class OpportunityRepository:
                 "costs": json.loads(row["costs_json"]) if row["costs_json"] else {}, "experiment_status": row["experiment_status"]}
 
     def ranking(self, *, strategy="physical", category="", q="", min_confidence=0, min_margin=None,
-                source_scope="all", sort="score_total", page=1, limit=20):
+                source_scope="all", sort="score_total", page=1, limit=20, pool="all"):
         columns = {"score_total": "s.score_total", "confidence_score": "s.confidence_score", "net_margin": "s.net_margin", "observed_at": "i.observed_at"}
         conditions, params = ["s.strategy=?"], [strategy]
         if category:
             conditions.append("(i.category=? OR i.category IN (SELECT name FROM categories WHERE parent=?))")
             params.extend([category, category])
         if q:
-            conditions.append("instr(lower(i.title),lower(?))>0")
+            conditions.append("instr(normalize_keyword(i.title),normalize_keyword(?))>0")
             params.append(q)
+        if pool != "all":
+            status_clause = "" if pool == "candidates" else " AND candidate.status=?"
+            conditions.append("EXISTS (SELECT 1 FROM experiments candidate WHERE candidate.item_id=i.id"+status_clause+")")
+            if pool != "candidates":
+                params.append(pool)
         conditions.append("s.confidence_score>=?")
         params.append(min_confidence)
         if min_margin is not None:
@@ -137,6 +142,8 @@ class OpportunityRepository:
             conditions.append("i.source='synthetic_demo'" if source_scope == "demo" else "i.source<>'synthetic_demo'")
         where = " AND ".join(conditions)
         with sqlite_connection(self.db_path) as conn:
+            from src.domain.opportunity_market import normalize_keyword
+            conn.create_function("normalize_keyword",1,normalize_keyword,deterministic=True)
             total = conn.execute(f"SELECT COUNT(*) FROM opportunity_items i JOIN opportunity_scores s ON i.id=s.item_id WHERE {where}", params).fetchone()[0]
             rows = conn.execute(f"""SELECT i.*, s.payload_json AS score_json, c.payload_json AS costs_json,e.status AS experiment_status
                 FROM opportunity_items i JOIN opportunity_scores s ON i.id=s.item_id

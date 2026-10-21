@@ -3,7 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 import { radarApi, type Category, type MarketEvidence } from '@/api/opportunities'
 import { Button } from '@/components/ui/button'
 
-const props = defineProps<{ categories: Category[]; revision: number }>()
+const props = defineProps<{ categories: Category[]; revision: number; preferredScope?: string }>()
 const emit = defineEmits<{ inspect: [category: string, keyword: string, scope: string] }>()
 const category = ref(''), keyword = ref(''), scope = ref('demo'), busy = ref(false), error = ref('')
 const evidence = ref<MarketEvidence | null>(null)
@@ -28,7 +28,7 @@ async function discover() {
   } catch (e) { error.value = (e as Error).message }
   finally { busy.value = false }
 }
-watch(() => props.revision, load)
+watch(() => [props.revision, props.preferredScope], () => { if (props.preferredScope) scope.value = props.preferredScope; load() })
 onMounted(load)
 const number = (v: string | number | null) => v === null ? '未知' : v
 </script>

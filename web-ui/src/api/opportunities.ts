@@ -43,10 +43,16 @@ export interface Opportunity {
 }
 export interface RadarFilters {
   strategy: Strategy; category: string; q: string; min_confidence: number
-  min_margin?: number; source_scope: string; sort: string
+  min_margin?: number; source_scope: string; sort: string; pool?: string
 }
 export interface Ranking { items: Opportunity[]; total: number; page: number; limit: number }
 export interface ImportReport { accepted: number; inserted: number; duplicates: number; new_snapshots: number; rejected: number; errors: { line: number; reason: string }[] }
+export interface ImportPreview extends ImportReport {
+  preview: boolean; total_rows: number; source_counts: Record<string, number>; category_counts: Record<string, number>
+  currency_counts: Record<string, number>; missing_counts: Record<string, number>; unknown_profit_rows: number
+  older_observations: number; sample_truncated: boolean; note: string
+  sample: { line: number; title: string; source: string; category: string; currency: string; price: string | null; action: string }[]
+}
 export interface ObservationPoint {
   observation_id: number; observed_at: string; price: string | null; want_count: number | null; view_count: number | null
   currency: string; title: string; seller_id: string | null; revision_count: number
@@ -70,6 +76,8 @@ export interface SellerItem {
 const base = '/api/opportunities'
 const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 export const radarApi = {
+  previewCSV: (content: string): Promise<ImportPreview> => http(`${base}/import/preview`, json('POST', { content })),
+  importTemplateUrl: (kind = 'basic') => `${base}/import/template?kind=${encodeURIComponent(kind)}`,
   business: (id: number): Promise<BusinessDossier> => http(`${base}/${id}/business`),
   quotes: (scope: string, page = 1): Promise<{ items: SupplierQuote[]; total: number }> => http(`${base}/suppliers`, { params: { source_scope: scope, page, limit: 50 } }),
   importQuotes: (content: string): Promise<{ accepted: number; inserted: number; rejected: number; errors: { line: number; reason: string }[] }> => http(`${base}/suppliers/import`, json('POST', { content })),

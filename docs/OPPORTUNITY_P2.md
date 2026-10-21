@@ -85,3 +85,21 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 部署前已备份 `data/app.sqlite3` 至 `data/backups/app-before-restart-20261021T012526178620Z.sqlite3`。SQLite完整性检查ok，备份与部署后的商品数均40，全部为既有synthetic_demo，未创建真实商品或采集任务。登录、HttpOnly会话、未登录401、Vue静态资源、指南、排行榜、4组演示证据、货源列表、实验详情、重复启动复用进程和原本地定时同步均实际验证。运行信息在 `data/radar-runtime.json`，日志在 `logs/radar-*.log`。
 
 部署变更再次运行后端全量测试：212 passed / 3 skipped（`--basetemp=.test-runs/p2-deployment`），前端 `npm run build` 类型检查及生产构建通过。公网/域名/远程服务器部署和Docker运行不在本次本机部署验收范围。
+
+## 真实数据输入与候选工作台（2026-10-21）
+
+页面顶部“导入 CSV / 下载模板”提供基础和含成本两种UTF-8 BOM空白模板，均只有合法表头，不用编造的商品填充真实库。上传后先预检，显示有效/错误行数、预计新增商品/快照、已有身份行、来源/类目/币种、字段缺失、利润未知和较早历史观测；有效样本最多展示20行，所有统计均按行计（包括重复），不代表市场规模。
+
+预检复用正式导入路径，在原SQLite事务中的savepoint内模拟后回滚，不保存商品、快照、成本、导入审计或评分，不预占容量。它与正式导入使用相同分类、校验、币种冲突、容量、身份/快照去重和历史成本保护；发生异常时整体回滚。单批仍是2MB/1000行。预检会短暂占用原写事务；确认导入时按当时库状态重新校验，不能把预检数量当作并发下的保存承诺。错误行跳过并报告，原有POST /import客户端契约保留。
+
+确认导入后，排行榜和市场证据切换到该文件对应来源范围；排行榜清除类目/关键词/门槛以展示导入结果。取消或关闭预检时只清除浏览器内存中的文件内容。合成来源保持隔离，不自动标为真实商品。
+
+新鉴权API：`GET /api/opportunities/import/template?kind=basic|costs`，`POST /api/opportunities/import/preview`（JSON content，与原导入相同）。预检报告在原导入报告字段之外增加preview、total_rows、source_counts、category_counts、currency_counts、missing_counts、unknown_profit_rows、older_observations、sample及sample_truncated。
+
+排行榜和导出支持 `pool=all|candidates|candidate|running|completed|stopped`，默认all保持原行为，candidates表示整个候选池，其余为对应原experiments状态，可与策略/类目/来源/利润/可信度及分页组合。页面正确显示候选待验证、七天测试中、已完成或已停止；再次保存候选不会在页面误显示状态已重置。CSV原字段保持，尾部追加experiment_status。商品自动分类和排行榜搜索沿用NFKC/空白/大小写归一化，与P2关键词分析一致。
+
+新增13项集成用例覆盖预检完整回滚、重复预检、与正式导入一致、容量不预占、零与未知、历史/人工成本保护、空白模板、格式/大小边界、数据库写入异常回滚、归一化分类搜索、候选状态/来源/分页/导出及鉴权。完整后端225 passed / 3 skipped，最近全量命令使用 `--basetemp=.test-runs/p2-real-input-complete`；Vue类型检查和生产构建通过。追加CSV状态字段后又运行相关27项回归通过。
+
+实际本机页面验证：既有合成CSV预检为41条有效、1条错误、预计新增商品与快照均0；预检前后商品、快照、成本及导入记录数量一致。窄屏弹窗溢出已修正，取消返回原页面；整个候选池筛选正确显示既有候选并将pool条件传至CSV导出。没有导入真实商品或发起平台请求，真实选品仍需用户提供有权使用的输入。
+
+![导入前预检（窄屏）](screenshots/opportunity-import-preview-p2.png)

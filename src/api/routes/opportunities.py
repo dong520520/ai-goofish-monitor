@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from src.api.opportunity_auth import require_opportunity_auth
 from src.domain.models.opportunity import CategoryConfig, CostAssumptions, DiscoveryRequest, ScoreRequest, Strategy
 from src.domain.models.opportunity_business import QuoteConfirmation, ExperimentConfig, ExperimentEntry
-from src.services.opportunity_service import OpportunityService, export_csv
+from src.services.opportunity_service import OpportunityService, export_csv, import_template
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"], dependencies=[Depends(require_opportunity_auth)])
 
@@ -75,8 +75,9 @@ def filters(strategy: Strategy = "physical", category: str = Query("", max_lengt
             min_confidence: float = Query(0, ge=0, le=100, allow_inf_nan=False),
             min_margin: float | None = Query(None, ge=-1000000, le=100, allow_inf_nan=False),
             source_scope: Literal["all", "demo", "imported"] = "all",
+            pool: Literal["all","candidates","candidate","running","completed","stopped"] = "all",
             sort: Literal["score_total", "confidence_score", "net_margin", "observed_at"] = "score_total"):
-    return dict(strategy=strategy, category=category, q=q, min_confidence=min_confidence, min_margin=min_margin, source_scope=source_scope, sort=sort)
+    return dict(strategy=strategy, category=category, q=q, min_confidence=min_confidence, min_margin=min_margin, source_scope=source_scope, sort=sort, pool=pool)
 
 
 @router.get("")
@@ -91,6 +92,20 @@ def import_csv(payload: CSVImport, service=Depends(get_service)):
         return service.import_csv(payload.content)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/import/preview")
+def preview_import(payload: CSVImport, service=Depends(get_service)):
+    try:
+        return service.import_csv(payload.content,preview=True)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@router.get("/import/template")
+def download_import_template(kind: Literal["basic","costs"]="basic"):
+    return Response(import_template(kind),media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":f'attachment; filename="opportunity-{kind}-template.csv"'})
 
 
 @router.post("/demo")

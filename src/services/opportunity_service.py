@@ -12,13 +12,25 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from src.domain.models.opportunity import CostAssumptions, OpportunityItem, DEFAULT_WEIGHTS
-from src.domain.opportunity_scoring import score_opportunity
+from src.domain.opportunity_scoring import score_opportunity, profit_analysis
+from src.domain.opportunity_market import normalize_keyword
 from src.infrastructure.persistence.opportunity_repository import OpportunityRepository, json_text
 from src.infrastructure.persistence.sqlite_connection import sqlite_connection
 
 REQUIRED_COLUMNS = {"source", "source_item_id", "title", "observed_at"}
 MAX_ROWS = 1000
 MAX_ITEMS = 10000
+TEMPLATE_COLUMNS = ["source", "source_item_id", "title", "price", "currency", "category", "observed_at",
+                    "url", "seller_id", "condition", "listing_created_at", "want_count", "view_count",
+                    "source_confidence", "raw_metadata"]
+
+
+def import_template(kind="basic"):
+    """Header-only templates: never present invented rows as real observations."""
+    output = io.StringIO()
+    columns = TEMPLATE_COLUMNS + (list(CostAssumptions.model_fields) if kind == "costs" else [])
+    csv.writer(output).writerow(columns)
+    return "\ufeff" + output.getvalue()
 
 
 def _reject_json_constant(value):
@@ -27,8 +39,9 @@ def _reject_json_constant(value):
 
 def classify_item(item, categories):
     if item.category == "未分类":
-        matches = [(max(len(k) for k in cat["keywords"] if k.casefold() in item.title.casefold()), cat["name"])
-                   for cat in categories if any(k.casefold() in item.title.casefold() for k in cat["keywords"])]
+        title = normalize_keyword(item.title)
+        matches = [(max(len(normalize_keyword(k)) for k in cat["keywords"] if normalize_keyword(k) in title), cat["name"])
+                   for cat in categories if any(normalize_keyword(k) in title for k in cat["keywords"])]
         if matches:
             item.category = sorted(matches, key=lambda r: (-r[0], r[1]))[0][1]
     if item.category not in {c["name"] for c in categories}:
@@ -57,11 +70,15 @@ class OpportunityService:
     def __init__(self, repository=None):
         self.repository = repository or OpportunityRepository()
 
-    def import_csv(self, content, *, origin="csv"):
+    def import_csv(self, content, *, origin="csv", preview=False):
         rows = parse_csv(content)
         categories = self.repository.categories()
         accepted, inserted, snapshots, errors = 0, 0, 0, []
+        source_counts, category_counts, currency_counts, missing_counts = (defaultdict(int) for _ in range(4))
+        sample, older_observations, unknown_profit_rows = [], 0, 0
         with self.repository.transaction() as conn:
+            if preview:
+                conn.execute("SAVEPOINT opportunity_import_preview")
             if conn.execute("SELECT COUNT(*) FROM opportunity_items").fetchone()[0] + len(rows) > MAX_ITEMS:
                 # Allow replay at capacity; check actual inserts below.
                 at_capacity = True
@@ -85,20 +102,47 @@ class OpportunityService:
                         exists = conn.execute("SELECT 1 FROM opportunity_items WHERE source=? AND source_item_id=?", (item.source, item.source_item_id)).fetchone()
                         if not exists:
                             raise ValueError("P0 最多保存 10000 件商品，请归档后再导入")
-                    _, new, snapshot = self.repository.upsert(conn, item, costs)
+                    previous = conn.execute("SELECT observed_at FROM opportunity_items WHERE source=? AND source_item_id=?", (item.source,item.source_item_id)).fetchone() if preview else None
+                    identifier, new, snapshot = self.repository.upsert(conn, item, costs)
                     accepted += 1
                     inserted += new
                     snapshots += snapshot
+                    if preview:
+                        source_counts[item.source] += 1
+                        category_counts[item.category] += 1
+                        currency_counts[item.currency] += 1
+                        for field in ("price", "seller_id", "condition", "listing_created_at", "want_count", "view_count"):
+                            if getattr(item,field) is None or getattr(item,field) == "":
+                                missing_counts[field] += 1
+                        stored_costs = conn.execute("SELECT payload_json FROM cost_assumptions WHERE item_id=?", (identifier,)).fetchone()
+                        effective_costs = CostAssumptions.model_validate_json(stored_costs[0]) if stored_costs else CostAssumptions()
+                        unknown_profit_rows += profit_analysis(effective_costs)["net_profit"] is None
+                        older_observations += bool(previous and item.observed_at < datetime.fromisoformat(previous[0]))
+                        if len(sample) < 20:
+                            sample.append({"line":line,"title":item.title,"source":item.source,"category":item.category,
+                                "currency":item.currency,"price":str(item.price) if item.price is not None else None,
+                                "action":"new_item" if new else "new_snapshot" if snapshot else "duplicate"})
                 except (ValueError, ValidationError, TypeError) as exc:
                     # Do not echo user rows or potentially sensitive imported values.
                     reason = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()) if isinstance(exc, ValidationError) else str(exc)
                     errors.append({"line": line, "reason": reason[:500]})
             conn.execute("INSERT INTO opportunity_imports(imported_at,origin,accepted,rejected,errors_json) VALUES (?,?,?,?,?)",
                          (datetime.now(timezone.utc).isoformat(), origin, accepted, len(errors), json_text(errors)))
-        self.rescore_all()
-        return {"accepted": accepted, "inserted": inserted, "duplicates": accepted-inserted,
+            if preview:
+                conn.execute("ROLLBACK TO opportunity_import_preview")
+                conn.execute("RELEASE opportunity_import_preview")
+        if not preview:
+            self.rescore_all()
+        report = {"accepted": accepted, "inserted": inserted, "duplicates": accepted-inserted,
                 "new_snapshots": snapshots, "rejected": len(errors), "errors": errors,
                 "note": "导入为观测基线；不生成上新或成交事件"}
+        if preview:
+            report.update({"preview":True,"total_rows":len(rows),"source_counts":dict(source_counts),
+                "category_counts":dict(category_counts),"currency_counts":dict(currency_counts),
+                "missing_counts":dict(missing_counts),"unknown_profit_rows":unknown_profit_rows,
+                "older_observations":older_observations,"sample":sample,"sample_truncated":accepted>len(sample),
+                "note":"预检未保存商品、快照、成本或导入记录；实际导入会按届时库状态重新校验，有效行导入，错误行跳过。"})
+        return report
 
     def rescore_all(self, strategy=None, weights=None):
         strategies = [strategy] if strategy else list(DEFAULT_WEIGHTS)
@@ -255,10 +299,10 @@ class OpportunityService:
 def export_csv(result):
     out = io.StringIO()
     writer = csv.writer(out)
-    writer.writerow(["source", "source_item_id", "title", "category", "currency", "price", "observed_at", "strategy", "score_total", "confidence_score", "net_profit", "net_margin", "blockers"])
+    writer.writerow(["source", "source_item_id", "title", "category", "currency", "price", "observed_at", "strategy", "score_total", "confidence_score", "net_profit", "net_margin", "blockers", "experiment_status"])
     for item in result["items"]:
         score = item["score"]
-        cells = [item["source"], item["source_item_id"], item["title"], item["category"], item["currency"], item["price"], item["observed_at"], score["strategy"], score["score_total"], score["confidence_score"], score["profit"]["net_profit"], score["profit"]["net_margin"], "；".join(score["blockers"])]
+        cells = [item["source"], item["source_item_id"], item["title"], item["category"], item["currency"], item["price"], item["observed_at"], score["strategy"], score["score_total"], score["confidence_score"], score["profit"]["net_profit"], score["profit"]["net_margin"], "；".join(score["blockers"]), item.get("experiment_status")]
         # Prevent spreadsheet formulas when untrusted titles are opened in Excel.
         writer.writerow(["'"+v if isinstance(v, str) and v.lstrip().startswith(("=", "+", "-", "@")) else v for v in cells])
     return "\ufeff"+out.getvalue()
