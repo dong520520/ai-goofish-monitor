@@ -1,6 +1,20 @@
 """Additive, repeatable schema on the existing application connection."""
 
 STATEMENTS = (
+    """CREATE TABLE IF NOT EXISTS opportunity_supplier_quotes (
+        id INTEGER PRIMARY KEY, source TEXT NOT NULL, quote_id TEXT NOT NULL,
+        fingerprint TEXT NOT NULL, payload_json TEXT NOT NULL, imported_at TEXT NOT NULL,
+        UNIQUE(source,quote_id,fingerprint))""",
+    """CREATE TABLE IF NOT EXISTS opportunity_quote_links (
+        item_id INTEGER PRIMARY KEY REFERENCES opportunity_items(id),
+        quote_id INTEGER NOT NULL REFERENCES opportunity_supplier_quotes(id),
+        confirmation_note TEXT NOT NULL, linked_at TEXT NOT NULL, applied_costs_json TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS opportunity_experiment_settings (
+        item_id INTEGER PRIMARY KEY REFERENCES experiments(item_id), start_date TEXT NOT NULL,
+        stop_reason TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS opportunity_experiment_entries (
+        item_id INTEGER NOT NULL REFERENCES experiments(item_id), day TEXT NOT NULL,
+        payload_json TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(item_id,day))""",
     """CREATE TABLE IF NOT EXISTS categories (
         name TEXT PRIMARY KEY, parent TEXT REFERENCES categories(name), keywords_json TEXT NOT NULL)""",
     """CREATE TABLE IF NOT EXISTS keyword_seeds (

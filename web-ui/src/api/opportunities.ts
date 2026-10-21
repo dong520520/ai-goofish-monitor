@@ -12,6 +12,18 @@ export interface MarketEvidence {
   category_coverage: { category: string; sample_count: number }[]
   lineage: { id: number; keyword: string; origin: string; category: string; matched_count: number; item_ids: number[] }[]
 }
+export interface SupplierQuote {
+  id: number; source: string; quote_id: string; supplier: string; product: string; sku: string; specification: string
+  condition: string; currency: string; quoted_at: string; purchase_cost: string | null; shipping_cost: string | null
+  lead_days: number | null; moq: number | null; source_confidence: number; evidence_note: string; verification_note: string
+}
+export interface BusinessDossier {
+  currency: string; is_demo: boolean
+  linked_quote: { quote_id: number; quote: SupplierQuote; confirmation_note: string; linked_at: string; current_costs_match_quote: boolean; minimum_purchase_outlay: string | null } | null
+  config: { start_date: string; status: string; stop_reason: string } | null
+  entries: { data: Record<string, string | number | null>; profit: { net_profit: number | null; net_margin: number | null } }[]
+  review: { decision: string; reasons: string[]; recorded_days: number; seven_day_net: string | null; recorded_net: string | null; missing_days: string[]; missing_finances: string[]; note: string } | null
+}
 export interface Keyword { id: number; keyword: string; category: string; origin: string; discovered_at: string }
 export interface OpportunityScore {
   score_total: number; confidence_score: number; strategy: Strategy; is_demo: boolean
@@ -58,6 +70,14 @@ export interface SellerItem {
 const base = '/api/opportunities'
 const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 export const radarApi = {
+  business: (id: number): Promise<BusinessDossier> => http(`${base}/${id}/business`),
+  quotes: (scope: string, page = 1): Promise<{ items: SupplierQuote[]; total: number }> => http(`${base}/suppliers`, { params: { source_scope: scope, page, limit: 50 } }),
+  importQuotes: (content: string): Promise<{ accepted: number; inserted: number; rejected: number; errors: { line: number; reason: string }[] }> => http(`${base}/suppliers/import`, json('POST', { content })),
+  confirmQuote: (id: number, quote: number, note: string) => http(`${base}/${id}/supplier/${quote}`, json('PUT', { confirmed: true, identity_note: note })),
+  experiment: (id: number, config: { start_date: string; status: string; stop_reason: string }) => http(`${base}/${id}/experiment`, json('PUT', config)),
+  recordEntry: (id: number, entry: Record<string, unknown>) => http(`${base}/${id}/experiment/entry`, json('PUT', entry)),
+  ledgerExportUrl: (id: number) => `${base}/${id}/experiment/export`,
+  supplierTemplateUrl: `${base}/suppliers/template`,
   research: (category = '', keyword = '', source_scope = 'imported'): Promise<MarketEvidence> => http(`${base}/research`, { params: { category, keyword, source_scope } }),
   researchExportUrl: (category: string, keyword: string, source_scope: string) => `${base}/research/export?${new URLSearchParams({ category, keyword, source_scope })}`,
   history: (id: number): Promise<ObservationHistory> => http(`${base}/${id}/history`),

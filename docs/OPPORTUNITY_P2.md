@@ -17,9 +17,44 @@
 
 鉴权API：`GET /api/opportunities/research?category=&keyword=&source_scope=imported&limit=100`，`GET /api/opportunities/research/export`（相同过滤条件）。证据最多读取10000件最新商品；页面最多100组及100条词链，返回截断标记，CSV最多10000组。原导入2MB/1000行、词库5000和排行榜分页边界保持。
 
+## P2B：人工货源报价与利润来源
+
+商品详情底部“货源报价与七天经营验证”导入报价CSV，可下载纯合成模板，也可参考 `src/resources/opportunity_supplier_demo.csv`。所有金额按商品币种、单次销售口径填写；采购是每件单价，运费是每单分摊假设（不自动除以MOQ）。MOQ×采购单价单独显示最低起订采购支出，未含运费及其他费用。
+
+必需字段：`source,quote_id,supplier,product,sku,specification,condition,quoted_at,evidence_note`。可选：`model,currency,purchase_cost,shipping_cost,lead_days,moq,source_confidence,verification_note`。带时区报价时间不得在未来，币种默认CNY，来源自评默认0.5；金额留空为未知，MOQ未知留空，交期0可明确填写。每批最多2MB/1000行，总量最多10000条报价版本；异常行按行号报告并记入原导入审计表。
+
+完全相同报价重复导入不新增。相同来源/报价ID的内容修订另存版本，不覆盖已确认关联。商品与报价需要选择具体版本、勾选确认并填写身份核对依据；不会按相似标题自动关联。已知SKU/规格/型号、成色、币种冲突返回400；合成报价不能关联真实商品。身份未知时由人工核实，来源自评不等于系统验证。
+
+确认报价只更新原 `CostAssumptions` 的采购、运费及货源依据，保留原有售价、平台费、履约费和损耗。任一费用未知则利润未知。当前报价、人工确认说明、版本、时间和成本匹配状态均可查看；手工修改相关成本后会提示与关联报价不一致，不再暗示费用仍来自该报价。单次销售净利润仍使用原Decimal公式。
+
+## P2B：七天自营实验与复盘
+
+1. 在商品详情展开“七天自营测试与复盘”，选择中国时区的开始日期、状态和可选停止原因，点击“纳入候选并保存实验”。复用原 `experiments` 候选记录。API先要求已存在候选。
+2. 按日人工记录自己经营的曝光（可未知）、咨询、订单、退款单数、销售收入（退款前）、退款金额、实际采购合计、实际运费、平台费、履约费、其他实际损耗及记录依据。金额均为**该日合计**，不要重复记入退款损耗。退款可发生在原订单日之后；不以商品消失、想要数推断销量。
+3. 日期只允许开始日起七天内、已经发生的日期。记录后不可改变实验起始日。同日保存修订该日记录；没有自动填补空白天。停止须提供原因，七天结束后才允许设置“已完成”。状态是手工声明，仍须检查证据完整度。
+4. 当日实际净收益 = 收入 − 退款 − 实际采购 − 运费 − 平台费 − 履约费 − 其他损耗。复用原Decimal利润计算，销售收入为0时净利率未知，跨日退款大于当日收入可产生负净收益；缺少任何一项实际财务输入则净收益未知。
+5. “已记录期间净收益”只在已有各天财务字段均完整时求和。完整七天净收益要求七天全记录、全部财务项及订单/退款单数完整；曝光/咨询可未知。任何未记录天、缺失数值均不视为0。
+6. 复盘启发式：窗口进行中且无已录财务缺失→`test`；财务缺失或窗口结束后证据不完整→`fill_evidence`；手工停止、疑似禁售/侵权→`stop`；完整七天若净收益不为正、无订单、存在退款单或退款金额→`stop`；其余完整正净收益→`continue`。停止建议是保守的人工复核规则，不是普适经营模型，未经真实业务校准。高净收益不能解除风险否决。
+7. 可导出带币种、原始字段和当日净收益的CSV，文本字段防公式注入；不包含客户隐私或自动执行动作。
+
+新API均需原登录：
+
+| 方法 / 路径（前缀 `/api/opportunities`） | 内容 |
+|---|---|
+| GET `/suppliers/template` | 合成格式模板 |
+| POST `/suppliers/import` | JSON `{ "content": "CSV文本" }` |
+| GET `/suppliers?source_scope=imported&page=1&limit=50` | 有界分页报价（每页最多100） |
+| PUT `/{item_id}/supplier/{quote_id}` | `{ "confirmed": true, "identity_note": "逐项核对说明" }` |
+| GET `/{item_id}/business` | 当前报价关联、账本及复盘 |
+| PUT `/{item_id}/experiment` | `{ "start_date":"2026-10-15", "status":"running", "stop_reason":"" }` |
+| PUT `/{item_id}/experiment/entry` | 日期、已知指标、实际财务字段和依据 |
+| GET `/{item_id}/experiment/export` | 人工经营账本CSV |
+
 ## 升级与备份
 
 继续使用 `APP_DATABASE_FILE`，没有第二个数据库。停服后备份 SQLite 主文件，或使用 SQLite backup API（运行中不能只复制主文件而忽略WAL）。P2A只使用原表，在 `app_metadata` 添加规划回执，重复初始化不改用户商品、类目或任务。
+
+P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`、`opportunity_quote_links`、`opportunity_experiment_settings`、`opportunity_experiment_entries` 四张表，原 `experiments.status` 延用并扩展为 running/completed/stopped。没有删除、重建或批量改名既有数据。回滚代码前先备份；旧代码不会主动读取新表，旧版候选操作仍保留实验状态，建议恢复完整数据库备份以回到旧版业务语义。
 
 ## 开源方法与范围
 
@@ -33,3 +68,8 @@
 - P2A：后端188 passed / 3 skipped；`npm run build`类型检查及生产构建通过。命令：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2a-full -q`（PowerShell环境变量先单独设置）。
 - 新增8项P2A测试，保留P0/P1首次基线、缺失计数、旧快照、重复快照、不完整扫描未知、来源隔离和原监控回归。
 - npm基线报告20项审计告警，未进行无关依赖大版本升级；真实平台测试保持关闭。
+- P2B另增24项测试：报价版本/幂等、人工身份确认、SKU/币种/成色/演示冲突、缺失与0、导入边界与审计、报价关联事务失败回滚、七天记录修订/窗口、退款敏感性、风险否决、CSV注入及所有新业务API鉴权。
+- 完整P2最终后端212 passed / 3 skipped（基线180，新增32）；`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2-final-normalized -q`。前端 `npm run build` 类型检查与生产构建通过。真实平台live测试3项按原默认跳过，未宣称真实销量、供应商验证或Docker运行通过。
+- 浏览器验收使用独立的临时SQLite和停用生命周期调度的本地服务，不读写用户业务库、不运行采集任务：20条计划覆盖17类目，重复计划仍20条；报价CSV导入1条，人工关联后原采购成本40、运费6；保存自营合成记录后已录净收益54，完整七天收益仍未知。窄屏完成发现流程、桌面完成货源与实验操作。
+
+![市场证据与原排行榜](screenshots/opportunity-research-p2.png)

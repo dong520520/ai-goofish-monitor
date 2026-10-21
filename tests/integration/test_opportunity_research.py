@@ -71,6 +71,10 @@ def test_normalized_keywords_and_seed_to_title_lineage(context):
     result = client.get("/api/opportunities/research", params={"keyword":"usb 键盘"}).json()
     assert result["cohorts"][0]["item_ids"] == [1]
     assert result["lineage"][0]["matched_count"] == 1
+    service.repository.save_category(CategoryConfig(name="电脑外设",keywords=["ＵＳＢ  键盘"]))
+    service.import_csv(csv_text(row("2",title="ＵＳＢ   键盘 104键")))
+    service.expand_keywords()
+    assert any("observed_title:item:2" in k["origin"] for k in service.keywords())
 
 
 def test_evidence_export_formula_safety_and_bounds(context):

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import OpportunityHistoryPanel from '@/components/results/OpportunityHistoryPanel.vue'
 import OpportunityMonitorPanel from '@/components/results/OpportunityMonitorPanel.vue'
 import OpportunityResearchPanel from '@/components/results/OpportunityResearchPanel.vue'
+import OpportunityBusinessPanel from '@/components/results/OpportunityBusinessPanel.vue'
 
 const modes: { key: Strategy; label: string; note: string }[] = [
   { key: 'physical', label: '实物选品', note: '采购、运费、履约与售后' },
@@ -23,6 +24,7 @@ const items = ref<Opportunity[]>([]), categories = ref<Category[]>([]), keywords
 const total = ref(0), page = ref(1), busy = ref(false), loading = ref(false), error = ref(''), message = ref('')
 const report = ref<ImportReport | null>(null), selected = ref<Opportunity | null>(null)
 const researchRevision = ref(0)
+const businessRevision = ref(0)
 const detailOpen = ref(false), configOpen = ref(false), costDraft = ref<Record<string, string | null>>({})
 const config = reactive<Category>({ name: '', parent: null, keywords: [] })
 const seedText = ref(''), breadth = ref(40), budget = ref(10), queueSize = ref(0)
@@ -70,6 +72,7 @@ async function saveCosts() {
     const payload = Object.fromEntries(Object.entries(costDraft.value).map(([key, value]) => [key, key in costLabels && (value === '' || value == null) ? null : value]))
     await radarApi.costs(selected.value!.id, payload)
     selected.value = await radarApi.detail(selected.value!.id, filters.strategy)
+    businessRevision.value++
     await load()
     message.value = '假设已保存，四种策略评分已更新'
   })
@@ -82,6 +85,12 @@ async function addCandidate() {
     message.value = '已纳入候选池，等待人工验证'
     await load()
   })
+}
+async function refreshSelected() {
+  if (!selected.value) return
+  selected.value = await radarApi.detail(selected.value.id, filters.strategy)
+  costDraft.value = { ...selected.value.costs }
+  await load()
 }
 function editCategory(event: Event) {
   const found = categories.value.find(c => c.name === (event.target as HTMLSelectElement).value)
@@ -133,7 +142,7 @@ onMounted(async () => {
     <div class="rounded-xl border border-teal-200 bg-teal-50/80 px-5 py-4 text-sm leading-6 text-teal-900">
       <strong>本地证据工作台</strong> · 无需闲鱼 Cookie 或 AI Key。想要数、浏览量与报价均不代表真实销量或成交价；利润来自你填写的成本假设。演示数据明确标识为合成样例。
     </div>
-    <OpportunityMonitorPanel @updated="load()" @open-item="id => openItem({ id })" />
+    <OpportunityMonitorPanel @updated="() => { researchRevision++; load() }" @open-item="id => openItem({ id })" />
     <OpportunityResearchPanel :categories="categories" :revision="researchRevision" @inspect="(category, keyword, scope) => { filters.category = category; filters.q = keyword; filters.source_scope = scope; load(true) }" />
     <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ message }}</p>
@@ -193,6 +202,7 @@ onMounted(async () => {
         <ul class="list-inside list-disc space-y-1 text-xs leading-5 text-slate-500"><li v-for="warning in selected.score.warnings" :key="warning">{{ warning }}</li></ul>
         <div v-if="selected.suspected_duplicates?.length"><h3 class="font-bold">疑似重复（未合并）</h3><p v-for="d in selected.suspected_duplicates" :key="d.id" class="mt-1 text-xs text-slate-500">#{{ d.id }} {{ d.title }} · 相似度 {{ d.similarity }} · {{ d.basis }}</p></div>
         <form class="space-y-4 border-t pt-4" @submit.prevent="saveCosts"><h3 class="font-bold">计算假设（{{ selected.currency }}）</h3><p class="text-xs text-slate-500">预计净利润 = 预计成交价 − 采购 − 运费 − 平台费用 − 履约 − 损耗。明确为零才填写 0；未知请留空。保存将替换当前假设。</p><div class="grid grid-cols-2 gap-3 sm:grid-cols-3"><label v-for="(label, key) in costLabels" :key="key" class="field">{{ label }}<input v-model="costDraft[key]" type="number" min="0" max="1000000000" step="0.01" placeholder="待补充" /></label></div><div class="grid gap-3 sm:grid-cols-2"><label v-for="(label, key) in evidenceLabels" :key="key" class="field">{{ label }}<textarea v-model="costDraft[key]" rows="2" :maxlength="key === 'evidence_note' ? 2000 : 1000" placeholder="来源、日期、凭据说明（请勿填写账号密钥）" /></label></div><div class="flex flex-wrap gap-3"><Button type="submit" :disabled="busy">保存假设并重新评分</Button><Button variant="outline" type="button" :disabled="busy" @click="addCandidate">{{ selected.experiment_status ? '已在候选池' : '纳入候选池' }}</Button></div><p v-if="error" role="alert" class="text-red-700">{{ error }}</p><p v-if="message" role="status" class="text-teal-700">{{ message }}</p></form>
+        <OpportunityBusinessPanel :item-id="selected.id" :strategy="filters.strategy" :revision="businessRevision" @updated="refreshSelected" />
       </div>
     </DialogContent></Dialog>
 

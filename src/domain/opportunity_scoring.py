@@ -11,12 +11,14 @@ COST_FIELDS = ("expected_sale_price", "purchase_cost", "shipping_cost", "platfor
 BLOCK_WORDS = ("破解", "盗版", "盗录", "共享账号", "账号共享", "假证", "仿牌", "高仿", "枪支", "毒品")
 
 
-def profit_analysis(costs: CostAssumptions) -> dict:
+def profit_analysis(costs: CostAssumptions, *, refund_amount: Decimal | None = Decimal(0)) -> dict:
     missing = [key for key in COST_FIELDS if getattr(costs, key) is None]
+    if refund_amount is None:
+        missing.append("refund_amount")
     if missing:
         return {"net_profit": None, "net_margin": None, "missing": missing, "basis": "待补充成本；未估算未知费用"}
     sale = costs.expected_sale_price
-    net = sale - sum((getattr(costs, key) for key in COST_FIELDS[1:]), Decimal(0))
+    net = sale - sum((getattr(costs, key) for key in COST_FIELDS[1:]), Decimal(0)) - refund_amount
     return {
         "net_profit": float(net),
         "net_margin": float((net / sale * 100).quantize(Decimal("0.01"))) if sale else None,

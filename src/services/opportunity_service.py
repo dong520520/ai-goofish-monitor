@@ -182,17 +182,18 @@ class OpportunityService:
         return self.import_csv((Path(__file__).resolve().parents[1]/"resources"/"opportunity_demo.csv").read_text(encoding="utf-8-sig"), origin="synthetic_demo")
 
     def expand_keywords(self):
+        from src.domain.opportunity_market import normalize_keyword
         with self.repository.transaction() as conn:
-            seeds = conn.execute("""SELECT k.* FROM keyword_seeds k JOIN categories c ON c.name=k.category
-                WHERE k.origin IN ('default_seed','user_seed') AND EXISTS (
-                SELECT 1 FROM json_each(c.keywords_json) WHERE value=k.keyword) ORDER BY k.id LIMIT 200""").fetchall()
+            active = {r["name"]: {normalize_keyword(k) for k in json.loads(r["keywords_json"])} for r in conn.execute("SELECT * FROM categories")}
+            seeds = conn.execute("SELECT * FROM keyword_seeds WHERE origin IN ('default_seed','user_seed') ORDER BY id LIMIT 5000").fetchall()
+            seeds = [s for s in seeds if normalize_keyword(s["keyword"]) in active.get(s["category"],set())][:200]
             items = conn.execute("SELECT id,title,category FROM opportunity_items ORDER BY id DESC LIMIT 500").fetchall()
             before = conn.execute("SELECT COUNT(*) FROM keyword_seeds").fetchone()[0]
             for seed in seeds:
                 for suffix in ("配件", "便携", "替换"):
                     self.repository.add_keyword(conn, seed["category"], seed["keyword"]+" "+suffix, f"rule:seed:{seed['id']}")
                 for item in items:
-                    if item["category"] == seed["category"] and seed["keyword"].casefold() in item["title"].casefold():
+                    if item["category"] == seed["category"] and normalize_keyword(seed["keyword"]) in normalize_keyword(item["title"]):
                         # Preserve title/specification evidence rather than claim unseen search demand.
                         phrase = re.sub(r"\s+", " ", item["title"]).strip()[:80]
                         self.repository.add_keyword(conn, item["category"], phrase, f"observed_title:item:{item['id']};seed:{seed['id']}")
@@ -216,7 +217,7 @@ class OpportunityService:
                 # Persisted fingerprint makes identical planning requests replay-safe.
                 # New/edited keyword configuration permits another bounded plan.
                 all_seeds = conn.execute("SELECT k.* FROM keyword_seeds k JOIN categories c ON c.name=k.category ORDER BY k.id LIMIT 5000").fetchall()
-                active = {c["name"]: {normalize_keyword(k) for k in c["keywords"]} for c in self.repository.categories()}
+                active = {r["name"]: {normalize_keyword(k) for k in json.loads(r["keywords_json"])} for r in conn.execute("SELECT * FROM categories")}
                 all_seeds = [k for k in all_seeds if k["origin"] not in ('default_seed','user_seed') or normalize_keyword(k["keyword"]) in active[k["category"]]]
                 fingerprint = hashlib.sha256(json_text([[(k["id"],k["keyword"]) for k in all_seeds],request.model_dump()]).encode()).hexdigest()
                 planned = conn.execute("SELECT 1 FROM app_metadata WHERE key=?", ("opportunity_plan:"+fingerprint,)).fetchone()

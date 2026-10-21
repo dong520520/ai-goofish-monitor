@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.api.opportunity_auth import require_opportunity_auth
 from src.domain.models.opportunity import CategoryConfig, CostAssumptions, DiscoveryRequest, ScoreRequest, Strategy
+from src.domain.models.opportunity_business import QuoteConfirmation, ExperimentConfig, ExperimentEntry
 from src.services.opportunity_service import OpportunityService, export_csv
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"], dependencies=[Depends(require_opportunity_auth)])
@@ -176,6 +177,65 @@ def research_export(options: dict = Depends(research_filters), service=Depends(g
     from src.services.opportunity_research_service import OpportunityResearchService
     return Response(OpportunityResearchService(service.repository).export(**options), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="market-evidence.csv"'})
+
+
+def get_business_service(service=Depends(get_service)):
+    from src.services.opportunity_business_service import OpportunityBusinessService
+    return OpportunityBusinessService(service)
+
+
+def business_action(action):
+    try:
+        return action()
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/suppliers/import")
+def supplier_import(payload: CSVImport, business=Depends(get_business_service)):
+    return business_action(lambda: business.import_quotes(payload.content))
+
+
+@router.get("/suppliers/template")
+def supplier_template():
+    from pathlib import Path
+    content = (Path(__file__).resolve().parents[2]/"resources"/"opportunity_supplier_demo.csv").read_text(encoding="utf-8")
+    return Response("\ufeff"+content, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="synthetic-supplier-example.csv"'})
+
+
+@router.get("/suppliers")
+def supplier_quotes(source_scope: Literal["imported","demo","all"]="imported", page: int=Query(1,ge=1,le=10000),
+                    limit: int=Query(50,ge=1,le=100), business=Depends(get_business_service)):
+    return business.quotes(source_scope=source_scope,page=page,limit=limit)
+
+
+@router.get("/{item_id}/business")
+def business_dossier(item_id: int, business=Depends(get_business_service)):
+    return business_action(lambda: business.dossier(item_id))
+
+
+@router.put("/{item_id}/supplier/{quote_id}")
+def confirm_supplier(item_id: int, quote_id: int, payload: QuoteConfirmation, business=Depends(get_business_service)):
+    return business_action(lambda: business.link_quote(item_id,quote_id,payload))
+
+
+@router.put("/{item_id}/experiment")
+def configure_experiment(item_id: int, payload: ExperimentConfig, business=Depends(get_business_service)):
+    return business_action(lambda: business.configure_experiment(item_id,payload))
+
+
+@router.put("/{item_id}/experiment/entry")
+def record_experiment(item_id: int, payload: ExperimentEntry, business=Depends(get_business_service)):
+    return business_action(lambda: business.record_entry(item_id,payload))
+
+
+@router.get("/{item_id}/experiment/export")
+def export_experiment(item_id: int, business=Depends(get_business_service)):
+    content = business_action(lambda: business.export_ledger(item_id))
+    return Response(content, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="experiment.csv"'})
 
 
 @router.get("/{item_id}")
