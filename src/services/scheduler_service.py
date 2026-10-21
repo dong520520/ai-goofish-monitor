@@ -54,12 +54,16 @@ class SchedulerService:
     async def reload_jobs(self, tasks: List[Task]):
         """重新加载所有定时任务"""
         print("正在重新加载定时任务...")
-        self.scheduler.remove_all_jobs()
-        self.scheduler.add_job(
-            self._sync_opportunity_records, "interval", seconds=60,
-            id="opportunity_local_sync", name="Opportunity: local SQLite sync",
-            max_instances=1, coalesce=True, replace_existing=True,
-        )
+        # Task edits must not postpone the independent local sync indefinitely.
+        for job in self.scheduler.get_jobs():
+            if job.id != "opportunity_local_sync":
+                self.scheduler.remove_job(job.id)
+        if self.scheduler.get_job("opportunity_local_sync") is None:
+            self.scheduler.add_job(
+                self._sync_opportunity_records, "interval", seconds=60,
+                id="opportunity_local_sync", name="Opportunity: local SQLite sync",
+                max_instances=1, coalesce=True, replace_existing=True,
+            )
 
         for task in tasks:
             if task.enabled and task.cron:

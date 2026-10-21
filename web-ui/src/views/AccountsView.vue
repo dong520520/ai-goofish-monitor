@@ -183,6 +183,7 @@ onMounted(fetchAccounts)
                 <Button size="sm" variant="outline" @click="goCreateTask(account.name)">{{ t('accounts.list.createTask') }}</Button>
               </div>
               <p class="break-all text-sm text-slate-500">{{ account.path }}</p>
+              <p v-if="account.state_message" class="break-words text-sm" :class="account.state_status === 'invalid' ? 'text-red-700' : 'text-slate-500'">{{ account.state_message }}</p>
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
               <Button size="sm" variant="outline" class="flex-1 min-w-[120px]" @click="openEditDialog(account.name)">{{ t('accounts.list.update') }}</Button>
@@ -209,7 +210,10 @@ onMounted(fetchAccounts)
               </TableRow>
               <TableRow v-else v-for="account in accounts" :key="account.name">
                 <TableCell class="font-medium">{{ account.name }}</TableCell>
-                <TableCell class="text-sm text-gray-500">{{ account.path }}</TableCell>
+                <TableCell class="text-sm text-gray-500">
+                  {{ account.path }}
+                  <p v-if="account.state_message" class="mt-1 max-w-lg whitespace-normal break-words" :class="account.state_status === 'invalid' ? 'text-red-700' : 'text-slate-500'">{{ account.state_message }}</p>
+                </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-2">
                     <Button size="sm" variant="outline" @click="goCreateTask(account.name)">{{ t('accounts.list.createTask') }}</Button>

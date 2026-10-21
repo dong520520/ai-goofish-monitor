@@ -1,0 +1,2 @@
+source,quote_id,supplier,product,sku,specification,condition,currency,quoted_at,purchase_cost,shipping_cost,lead_days,moq,source_confidence,evidence_note,verification_note
+synthetic_demo,example-001,合成供货方,合成键盘报价,K87-white,87键白色,全新,CNY,2026-10-20T08:00:00+08:00,40,6,3,2,0.5,纯合成格式样例，每件采购单价及每单运费，不能当作真实报价,未经独立核实

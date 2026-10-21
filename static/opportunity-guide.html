@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>闲鱼选品雷达 · 使用指南</title>
+  <style>
+    :root{color-scheme:light;font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;color:#172c36;background:#f2f7f6;line-height:1.8}*{box-sizing:border-box}body{margin:0}header{background:#103f40;color:#fff;padding:52px max(24px,calc((100% - 1040px)/2))}header p{color:#c2e6df;max-width:760px}h1{font-size:clamp(28px,5vw,42px);line-height:1.3;margin:10px 0 18px}h2{font-size:23px;color:#174c49;margin:0 0 16px}h3{font-size:17px;margin:0 0 8px}main{max-width:1090px;margin:auto;padding:28px 24px 64px}section{background:white;border:1px solid #dbe8e4;border-radius:16px;padding:26px;margin-bottom:22px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.grid article{border:1px solid #dbe8e4;border-radius:12px;padding:18px;background:#fafdfb}.number{color:#04786e;font-size:12px;font-weight:bold}.button{display:inline-block;background:#d8f8df;color:#173c32;padding:10px 20px;border-radius:9px;font-weight:700;text-decoration:none;margin-top:10px}.subtle{color:#59716d;font-size:14px}a{color:#087968}code{font-family:Consolas,monospace;background:#eff5f4;padding:2px 6px;border-radius:4px;overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#eff5f4;border-radius:8px;padding:14px;font-size:13px;overflow-wrap:anywhere}.note{background:#fff8e8;border-left:4px solid #d79d28;padding:12px 18px;border-radius:6px}.step{margin:22px 0}.step p{margin:6px 0}table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid #e4ece8;padding:12px 8px;text-align:left;vertical-align:top}ol{padding-left:24px}li{margin:6px 0}nav{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}nav a{color:#d4f4ec;font-size:14px}details summary{cursor:pointer;font-weight:700}footer{font-size:13px;color:#637872} @media(max-width:760px){.grid{grid-template-columns:1fr 1fr}header{padding:30px 22px}section{padding:20px}.grid article{padding:13px}}@media(max-width:420px){.grid{grid-template-columns:1fr}main{padding:18px 14px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="number" style="color:#9ee3cf">本机工作台 · P2</div>
+    <h1>闲鱼选品雷达，帮你把选品做成有依据的决定</h1>
+    <p>把你合法取得的商品报价、已有监控记录和货源信息整理起来，比较市场样本、算清利润，再用自己的小规模经营结果验证方向。</p>
+    <a class="button" href="http://127.0.0.1:8000/opportunities">打开选品雷达 →</a>
+    <nav><a href="#purpose">能做什么</a><a href="#start">第一次使用</a><a href="#real">开始真实选品</a><a href="#cost">核算利润</a><a href="#test">七天测试</a><a href="#help">启动与常见问题</a></nav>
+  </header>
+  <main>
+    <section id="purpose">
+      <h2>这个项目干什么用？</h2>
+      <div class="grid">
+        <article><div class="number">01 / 找方向</div><h3>类目与关键词</h3><p>维护类目、离线扩展种子词，让有限的发现预算尽量覆盖不同类目。</p></article>
+        <article><div class="number">02 / 比样本</div><h3>价格与可信度</h3><p>按来源、币种、成色及型号规格分组，看价格分布和缺少哪些证据。</p></article>
+        <article><div class="number">03 / 算成本</div><h3>货源与净利润</h3><p>核对货源报价，补齐采购、运费、平台费、履约及损耗，计算预计净收益。</p></article>
+        <article><div class="number">04 / 做验证</div><h3>测试与复盘</h3><p>记录自己的咨询、订单、退款和实际费用，决定继续、补证据还是停止。</p></article>
+      </div>
+      <p class="subtle">原项目的监控任务、账号管理、AI分析、通知和价格历史继续保留。当前选品评分采用可解释规则，不需要AI Key；原AI分析另需配置模型服务。</p>
+      <p class="note">它不会凭空给出真实销量、保证收益或自动替你验证供应商。想要数、浏览量和报价只是观察信号。当前新增选品流程保持离线，客服、自动上架、采购和发货没有开发。</p>
+    </section>
+    <section id="start">
+      <h2>第一次使用：先跑通演示</h2>
+      <ol>
+        <li>双击桌面的 <strong>“闲鱼选品雷达”</strong>，或打开 <a href="http://127.0.0.1:8000/opportunities">本机选品页面</a>。</li>
+        <li>当前本机沿用默认Web账号：用户名 <code>admin</code>，密码 <code>admin123</code>。这是工作台登录，不是闲鱼账号登录。</li>
+        <li>点击 <strong>“载入合成演示”</strong>。当前库已有40件合成商品，重复载入不会增加重复商品。所有演示数字都不是真实市场数据。</li>
+        <li>在“全类目发现与市场证据”中选择“合成演示”，点击 <strong>“分析竞品样本”</strong>。先看样本数量、缺失项，再看价格P25 / P50 / P75。</li>
+        <li>点击 <strong>“扩词并公平规划类目”</strong>。默认广度40%、深挖60%，预算最多50条。得到的是人工发现待办，不会自动联网抓取。</li>
+        <li>在下方排行榜切换四种策略，点商品名称查看证据、风险、成本假设，再选择“纳入候选池”。</li>
+      </ol>
+      <p class="subtle">四种策略：实物选品看采购与交付；合规虚拟增加原创授权及平台可售性核验；低买高卖增加转售参考和验真；蓝海探索侧重长尾证据，样本少不等于市场好。</p>
+    </section>
+    <section id="real">
+      <h2>准备好后，开始真实选品</h2>
+      <div class="step"><h3>1. 选择一个你熟悉的方向</h3><p>先从一个细分类目和少量商品开始，例如电脑外设、家居收纳。到“类目与发现”维护关键词，既有17个细分类目可继续增加。</p></div>
+      <div class="step"><h3>2. 导入你有权使用的观测</h3><p>点击页面顶部“导入 CSV / 下载模板”，下载基础或含成本的空白模板，填写后选择文件。先查看预检中的有效行、新商品/快照、重复、币种、缺失和错误行，再确认导入有效行。取消预检不会保存商品、快照、成本或导入记录。</p><p>也可通过“导入已有监控快照”读取原系统SQLite，不会额外访问平台。真实来源数量和监控任务状态以当前界面为准。</p><p>商品CSV至少需要 <code>source,source_item_id,title,observed_at</code>，通常还应填写报价、币种、类目及已知成色。真实闲鱼商品使用一致的 <code>source=goofish</code> 和稳定商品ID，以便与原监控去重；演示数据保留 <code>synthetic_demo</code> 来源。</p><p class="subtle">模板只有表头，不包含伪造的真实商品。观察时间必须带时区，不能在未来；不知道发布时间、卖家ID或兴趣计数时留空。相似标题不会自动合并为同一商品。实际导入会按保存时的库状态再次校验，错误行跳过并报告。</p></div>
+      <div class="step"><h3>3. 看缺口，再定候选</h3><p>证据来源选择“真实导入观测”。不同来源、币种、成色及已知型号规格会分别分析。P50是这组本地报价的中位数，P25/P75表示报价分布位置，不是实际成交价。</p><p>先补少样本、未知成色/规格、货源和成本，再参考排名；高评分也需要人工验证。未知利润不会因为其他分数高就自动变成优先候选。</p></div>
+    </section>
+    <section id="cost">
+      <h2>怎么核算货源与利润？</h2>
+      <ol>
+        <li>打开商品详情，在底部展开“货源报价与七天经营验证”。</li>
+        <li>点击“下载该商品询价模板”，已有描述、币种和明确记录的身份字段会预填。向实际供货方核对后，补齐供应商、货源出处、报价编号、真实SKU、规格、成色、报价时间及费用，再导入货源CSV。也可下载空白模板；合成格式样例用于理解格式。</li>
+        <li>选择具体报价版本，逐项核对身份，填写说明并勾选确认。系统会拒绝已知币种、SKU或成色冲突。</li>
+        <li>关联报价会更新原成本中的采购、运费和货源依据。继续补齐售价、平台费用、履约成本和预计损耗；不知道就留空，确认为零才填0。</li>
+      </ol>
+      <pre>预计净利润 = 预计成交价 − 采购 − 运费 − 平台费用 − 履约成本 − 预计损耗
+预计净利率 = 预计净利润 ÷ 预计成交价 × 100%</pre>
+      <p>仅作计算演示：售价100，采购40、运费6、平台费3、履约2、损耗4，预计净利润45、净利率45%。任何一项成本未知时，系统保留“未知利润”。</p>
+      <p class="subtle">报价采购金额是每件单价，运费按每次销售分摊口径填写；MOQ（最低起订量）单独展示，MOQ×单价仅表示最低采购支出，不包含其他费用。人工确认不等于系统已经核实供应商。</p>
+    </section>
+    <section id="test">
+      <h2>怎么做七天测试与复盘？</h2>
+      <ol>
+        <li>在商品详情展开“七天自营测试与复盘”，选择开始日期，保存实验。</li>
+        <li>每天填写你自己的曝光（可未知）、咨询、订单、退款单数和当日实际收入、退款与各项费用，并写明记录依据。</li>
+        <li>费用填写当日合计，退款不要在其他损耗中重复记账。同一天重复保存是修订该天记录。</li>
+        <li>看“已记录期间净收益”和“完整七天净收益”。少一天或缺成本，不会把空白当作0。</li>
+        <li>七天结束后根据复盘建议决定下一步。出现退款或非正收益时，当前保守规则建议停止复核；风险否决不会被高收益抵消。</li>
+      </ol>
+      <table><thead><tr><th>建议</th><th>如何理解</th></tr></thead><tbody><tr><td>继续记录测试</td><td>窗口尚在进行，继续积累自己的经营结果。</td></tr><tr><td>补充证据</td><td>日期、订单/退款数量或财务输入不足，先补记录再判断。</td></tr><tr><td>继续验证</td><td>完整七天记录满足当前正收益规则，仍需人工决定是否继续。</td></tr><tr><td>停止并复核</td><td>存在退款、无订单、非正收益、风险否决或人工停止原因。</td></tr></tbody></table>
+      <p class="subtle">复盘是尚未校准的保守启发式，不是收益承诺。系统不从商品消失或想要数推断真实订单。</p>
+      <p>回到排行榜，将“候选状态”改为“整个候选池”“候选待验证”“七天测试中”“已完成测试”或“已停止测试”，即可只看对应商品。筛选后导出的CSV也保持相同范围；再次纳入候选不会重置原实验状态。</p>
+    </section>
+    <section id="help">
+      <h2>启动、停止和常见问题</h2>
+      <table><tbody><tr><th>本机入口</th><td><a href="http://127.0.0.1:8000/opportunities">http://127.0.0.1:8000/opportunities</a></td></tr><tr><th>日常启动</th><td>双击桌面“闲鱼选品雷达”。已运行时直接复用，不会再起一个服务。</td></tr><tr><th>使用指南</th><td>双击桌面“闲鱼选品雷达使用指南”，或点击选品页面顶部“使用指南”。</td></tr><tr><th>数据保存</th><td>保存在项目的 <code>data/app.sqlite3</code>；关网页不会删除记录。升级前会使用SQLite备份接口保存副本。</td></tr><tr><th>服务关闭</th><td>关网页不等于停服务。需要停服务时，在项目目录运行下方停止命令；数据库会保留。</td></tr><tr><th>电脑关机后</th><td>服务会停止。下次开机重新双击桌面入口即可；没有设置系统开机自启。</td></tr></tbody></table>
+      <details class="step"><summary>需要命令操作时</summary><pre>Set-Location "D:\项目\咸鱼"
+# 在后台启动
+.\start-radar.ps1 -Background -OpenBrowser
+# 更新代码后，备份并重启
+.\start-radar.ps1 -Background -Restart
+# 备份并停止，保留数据
+.\start-radar.ps1 -Stop</pre><p class="subtle">后台服务仅监听本机127.0.0.1。日志在 <code>logs/radar-*.log</code>，备份在 <code>data/backups/</code>，当前运行信息在 <code>data/radar-runtime.json</code>。完整开发说明在 <code>docs/OPPORTUNITY_P2.md</code>。</p></details>
+      <p><strong>打不开：</strong>先双击专用桌面入口，等待启动完成，再刷新页面。如果提示端口占用，先核对占用者，脚本不会停止其他项目。</p>
+      <p><strong>登录失败：</strong>升级重启后需要重新登录。当前沿用本机Web账号，修改过配置后以你自己的账号为准。</p>
+      <p><strong>真实观测为空：</strong>如果当前仅有 synthetic_demo 来源，它们是合成样例。先导入有权使用的真实CSV或已有监控结果，再选择真实导入来源。</p>
+      <p><strong>利润一直未知：</strong>检查六项销售/成本输入；明确为零的项目也需要填0。</p>
+      <p><strong>AI分析设置：</strong>在“系统设置 → AI 模型”检查当前接口、模型名和密钥状态，再点击“测试连接”。DeepSeek V4.1 Flash 的官方接口为 <code>https://api.deepseek.com</code>，模型名填 <code>deepseek-flash</code>；密钥保存在本机，不回显。配置模型后，原监控任务可选择“AI判断”；已有关键词任务保持原模式，选品六维评分仍由规则计算。费用按服务商规则结算。</p>
+    </section>
+    <footer>对应 ai-goofish-monitor 的 P2 本机部署 · 2026-10-21。页面以操作说明为主，不读取或展示你的Cookie、API密钥或实际客户记录。</footer>
+  </main>
+</body>
+</html>

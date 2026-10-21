@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 
 from src.api.opportunity_auth import require_opportunity_auth
 from src.domain.models.opportunity import CategoryConfig, CostAssumptions, DiscoveryRequest, ScoreRequest, Strategy
-from src.services.opportunity_service import OpportunityService, export_csv
+from src.domain.models.opportunity_business import QuoteConfirmation, ExperimentConfig, ExperimentEntry
+from src.services.opportunity_service import OpportunityService, export_csv, import_template
 
 router = APIRouter(prefix="/api/opportunities", tags=["opportunities"], dependencies=[Depends(require_opportunity_auth)])
 
@@ -74,8 +75,9 @@ def filters(strategy: Strategy = "physical", category: str = Query("", max_lengt
             min_confidence: float = Query(0, ge=0, le=100, allow_inf_nan=False),
             min_margin: float | None = Query(None, ge=-1000000, le=100, allow_inf_nan=False),
             source_scope: Literal["all", "demo", "imported"] = "all",
+            pool: Literal["all","candidates","candidate","running","completed","stopped"] = "all",
             sort: Literal["score_total", "confidence_score", "net_margin", "observed_at"] = "score_total"):
-    return dict(strategy=strategy, category=category, q=q, min_confidence=min_confidence, min_margin=min_margin, source_scope=source_scope, sort=sort)
+    return dict(strategy=strategy, category=category, q=q, min_confidence=min_confidence, min_margin=min_margin, source_scope=source_scope, sort=sort, pool=pool)
 
 
 @router.get("")
@@ -90,6 +92,20 @@ def import_csv(payload: CSVImport, service=Depends(get_service)):
         return service.import_csv(payload.content)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/import/preview")
+def preview_import(payload: CSVImport, service=Depends(get_service)):
+    try:
+        return service.import_csv(payload.content,preview=True)
+    except ValueError as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@router.get("/import/template")
+def download_import_template(kind: Literal["basic","costs"]="basic"):
+    return Response(import_template(kind),media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition":f'attachment; filename="opportunity-{kind}-template.csv"'})
 
 
 @router.post("/demo")
@@ -158,6 +174,91 @@ def export(options: dict = Depends(filters), service=Depends(get_service)):
     service.rescore_all(options["strategy"])
     result = service.repository.ranking(**options, limit=10000)
     return Response(export_csv(result), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="opportunities.csv"'})
+
+
+def research_filters(category: str = Query("", max_length=100), keyword: str = Query("", max_length=200),
+                     source_scope: Literal["imported", "demo", "all"] = "imported"):
+    return dict(category=category, keyword=keyword, source_scope=source_scope)
+
+
+@router.get("/research")
+def research(options: dict = Depends(research_filters), limit: int = Query(100, ge=1, le=100), service=Depends(get_service)):
+    from src.services.opportunity_research_service import OpportunityResearchService
+    return OpportunityResearchService(service.repository).evidence(**options, limit=limit)
+
+
+@router.get("/research/export")
+def research_export(options: dict = Depends(research_filters), service=Depends(get_service)):
+    from src.services.opportunity_research_service import OpportunityResearchService
+    return Response(OpportunityResearchService(service.repository).export(**options), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="market-evidence.csv"'})
+
+
+def get_business_service(service=Depends(get_service)):
+    from src.services.opportunity_business_service import OpportunityBusinessService
+    return OpportunityBusinessService(service)
+
+
+def business_action(action):
+    try:
+        return action()
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/suppliers/import")
+def supplier_import(payload: CSVImport, business=Depends(get_business_service)):
+    return business_action(lambda: business.import_quotes(payload.content))
+
+
+@router.get("/suppliers/template")
+def supplier_template(kind: Literal["demo","blank"]="demo", item_id: int | None=Query(None,ge=1),
+                      business=Depends(get_business_service)):
+    if kind == "blank":
+        content = business_action(lambda: business.quote_template(item_id))
+        filename = f"supplier-inquiry-item-{item_id}.csv" if item_id is not None else "blank-supplier-template.csv"
+        return Response(content,media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":f'attachment; filename="{filename}"'})
+    if item_id is not None:
+        raise HTTPException(400,"候选询价模板请使用 kind=blank")
+    from pathlib import Path
+    content = (Path(__file__).resolve().parents[2]/"resources"/"opportunity_supplier_demo.csv").read_text(encoding="utf-8")
+    return Response("\ufeff"+content, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="synthetic-supplier-example.csv"'})
+
+
+@router.get("/suppliers")
+def supplier_quotes(source_scope: Literal["imported","demo","all"]="imported", page: int=Query(1,ge=1,le=10000),
+                    limit: int=Query(50,ge=1,le=100), business=Depends(get_business_service)):
+    return business.quotes(source_scope=source_scope,page=page,limit=limit)
+
+
+@router.get("/{item_id}/business")
+def business_dossier(item_id: int, business=Depends(get_business_service)):
+    return business_action(lambda: business.dossier(item_id))
+
+
+@router.put("/{item_id}/supplier/{quote_id}")
+def confirm_supplier(item_id: int, quote_id: int, payload: QuoteConfirmation, business=Depends(get_business_service)):
+    return business_action(lambda: business.link_quote(item_id,quote_id,payload))
+
+
+@router.put("/{item_id}/experiment")
+def configure_experiment(item_id: int, payload: ExperimentConfig, business=Depends(get_business_service)):
+    return business_action(lambda: business.configure_experiment(item_id,payload))
+
+
+@router.put("/{item_id}/experiment/entry")
+def record_experiment(item_id: int, payload: ExperimentEntry, business=Depends(get_business_service)):
+    return business_action(lambda: business.record_entry(item_id,payload))
+
+
+@router.get("/{item_id}/experiment/export")
+def export_experiment(item_id: int, business=Depends(get_business_service)):
+    content = business_action(lambda: business.export_ledger(item_id))
+    return Response(content, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": 'attachment; filename="experiment.csv"'})
 
 
 @router.get("/{item_id}")

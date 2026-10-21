@@ -7,6 +7,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import OpportunityHistoryPanel from '@/components/results/OpportunityHistoryPanel.vue'
 import OpportunityMonitorPanel from '@/components/results/OpportunityMonitorPanel.vue'
+import OpportunityResearchPanel from '@/components/results/OpportunityResearchPanel.vue'
+import OpportunityBusinessPanel from '@/components/results/OpportunityBusinessPanel.vue'
+import OpportunityImportDialog from '@/components/results/OpportunityImportDialog.vue'
 
 const modes: { key: Strategy; label: string; note: string }[] = [
   { key: 'physical', label: '实物选品', note: '采购、运费、履约与售后' },
@@ -17,10 +20,14 @@ const modes: { key: Strategy; label: string; note: string }[] = [
 const dimensionLabels: Record<string, string> = { demand: '市场需求', profit: '预计利润', competition: '竞争友好度', fulfillment: '履约可行性', risk: '风险可控', differentiation: '差异化' }
 const costLabels: Record<string, string> = { expected_sale_price: '预计成交价', purchase_cost: '采购成本', shipping_cost: '运费', platform_fee: '平台费用', fulfillment_cost: '履约成本', expected_loss: '预计损耗', resale_reference: '转售参考价' }
 const evidenceLabels: Record<string, string> = { evidence_note: '成本假设依据', supplier_evidence: '货源 / 取得方式依据', delivery_evidence: '交付能力依据', rights_evidence: '权利授权依据', platform_evidence: '平台可售性依据', resale_evidence: '转售参考价依据', authenticity_evidence: '真实性 / 成色依据', differentiation_evidence: '差异化依据' }
-const filters = reactive<RadarFilters>({ strategy: 'physical', category: '', q: '', min_confidence: 0, source_scope: 'all', sort: 'score_total' })
+const filters = reactive<RadarFilters>({ strategy: 'physical', category: '', q: '', min_confidence: 0, source_scope: 'all', sort: 'score_total', pool: 'all' })
+const poolLabels: Record<string, string> = { candidate: '候选待验证', running: '七天测试中', completed: '已完成测试', stopped: '已停止测试' }
+const importOpen = ref(false), researchScope = ref<string | undefined>(undefined)
 const items = ref<Opportunity[]>([]), categories = ref<Category[]>([]), keywords = ref<Keyword[]>([])
 const total = ref(0), page = ref(1), busy = ref(false), loading = ref(false), error = ref(''), message = ref('')
 const report = ref<ImportReport | null>(null), selected = ref<Opportunity | null>(null)
+const researchRevision = ref(0)
+const businessRevision = ref(0)
 const detailOpen = ref(false), configOpen = ref(false), costDraft = ref<Record<string, string | null>>({})
 const config = reactive<Category>({ name: '', parent: null, keywords: [] })
 const seedText = ref(''), breadth = ref(40), budget = ref(10), queueSize = ref(0)
@@ -44,16 +51,14 @@ async function act(action: () => Promise<unknown>) {
   busy.value = true; error.value = ''; message.value = ''
   try { await action() } catch (e) { error.value = (e as Error).message } finally { busy.value = false }
 }
-async function imported(action: () => Promise<ImportReport>) {
-  await act(async () => { report.value = await action(); await load(true) })
+async function imported(action: () => Promise<ImportReport>, scope?: string) {
+  await act(async () => { report.value = await action(); if (scope) researchScope.value = scope; researchRevision.value++; await load(true) })
 }
-async function upload(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  if (file.size > 2_000_000) { error.value = 'CSV 最大 2 MB'; input.value = ''; return }
-  await imported(() => file.text().then(radarApi.importCSV))
-  input.value = ''
+async function importedFile(result: ImportReport, scope: string) {
+  report.value = result; filters.source_scope = scope; filters.pool = 'all'; filters.category = ''; filters.q = ''
+  filters.min_confidence = 0; filters.min_margin = undefined
+  researchScope.value = scope; researchRevision.value++
+  await load(true)
 }
 async function openItem(item: { id: number }) {
   await act(async () => {
@@ -68,6 +73,7 @@ async function saveCosts() {
     const payload = Object.fromEntries(Object.entries(costDraft.value).map(([key, value]) => [key, key in costLabels && (value === '' || value == null) ? null : value]))
     await radarApi.costs(selected.value!.id, payload)
     selected.value = await radarApi.detail(selected.value!.id, filters.strategy)
+    businessRevision.value++
     await load()
     message.value = '假设已保存，四种策略评分已更新'
   })
@@ -76,10 +82,16 @@ async function addCandidate() {
   if (!selected.value) return
   await act(async () => {
     await radarApi.candidate(selected.value!.id, filters.strategy)
-    selected.value!.experiment_status = 'candidate'
-    message.value = '已纳入候选池，等待人工验证'
+    selected.value = await radarApi.detail(selected.value!.id, filters.strategy)
+    message.value = '候选已保存，原有实验状态保留'
     await load()
   })
+}
+async function refreshSelected() {
+  if (!selected.value) return
+  selected.value = await radarApi.detail(selected.value.id, filters.strategy)
+  costDraft.value = { ...selected.value.costs }
+  await load()
 }
 function editCategory(event: Event) {
   const found = categories.value.find(c => c.name === (event.target as HTMLSelectElement).value)
@@ -115,23 +127,23 @@ onMounted(async () => {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P1</p>
+        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P2</p>
         <h1 class="mt-2 flex items-center gap-2 text-3xl font-bold tracking-tight text-slate-900"><Radar class="h-7 w-7 text-teal-600" />选品雷达</h1>
         <p class="mt-2 text-sm text-slate-500">从商品观测发现方向，用证据决定下一步。</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <a href="/static/opportunity-guide.html" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-md border bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">使用指南</a>
         <Button variant="outline" :disabled="busy" @click="configOpen = true"><SlidersHorizontal class="mr-2 h-4 w-4" />类目与发现</Button>
-        <Button variant="outline" :disabled="busy" @click="imported(radarApi.demo)"><FlaskConical class="mr-2 h-4 w-4" />载入合成演示</Button>
-        <label class="inline-flex cursor-pointer items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" :class="busy ? 'pointer-events-none opacity-50' : ''">
-          <Upload class="mr-2 h-4 w-4" />导入 CSV<input aria-label="导入商品 CSV" type="file" accept=".csv,text/csv" class="sr-only" :disabled="busy" @change="upload" />
-        </label>
+        <Button variant="outline" :disabled="busy" @click="imported(radarApi.demo, 'demo')"><FlaskConical class="mr-2 h-4 w-4" />载入合成演示</Button>
+        <Button :disabled="busy" @click="importOpen = true"><Upload class="mr-2 h-4 w-4" />导入 CSV / 下载模板</Button>
       </div>
     </div>
 
     <div class="rounded-xl border border-teal-200 bg-teal-50/80 px-5 py-4 text-sm leading-6 text-teal-900">
       <strong>本地证据工作台</strong> · 无需闲鱼 Cookie 或 AI Key。想要数、浏览量与报价均不代表真实销量或成交价；利润来自你填写的成本假设。演示数据明确标识为合成样例。
     </div>
-    <OpportunityMonitorPanel @updated="load()" @open-item="id => openItem({ id })" />
+    <OpportunityMonitorPanel @updated="() => { researchRevision++; load() }" @open-item="id => openItem({ id })" />
+    <OpportunityResearchPanel :categories="categories" :revision="researchRevision" :preferred-scope="researchScope" @inspect="(category, keyword, scope) => { filters.category = category; filters.q = keyword; filters.source_scope = scope; load(true) }" />
     <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ message }}</p>
     <div v-if="report" role="status" class="rounded-lg border bg-white p-4 text-sm">
@@ -153,13 +165,14 @@ onMounted(async () => {
         <label class="field">最低可信度（0–100）<input v-model.number="filters.min_confidence" type="number" min="0" max="100" required /></label>
         <label class="field">数据来源<select v-model="filters.source_scope"><option value="all">全部（演示与导入分开分析）</option><option value="demo">仅合成演示</option><option value="imported">仅导入观测</option></select></label>
         <label class="field">排序<select v-model="filters.sort"><option value="score_total">选品评分</option><option value="confidence_score">数据可信度</option><option value="net_margin">预计净利率</option><option value="observed_at">最新观察时间</option></select></label>
+        <label class="field">候选状态<select v-model="filters.pool"><option value="all">全部商品</option><option value="candidates">整个候选池</option><option value="candidate">候选待验证</option><option value="running">七天测试中</option><option value="completed">已完成测试</option><option value="stopped">已停止测试</option></select></label>
         <Button type="submit" :disabled="loading || busy">{{ loading ? '读取评分中…' : '应用筛选' }}</Button>
-        <Button variant="outline" type="button" :disabled="busy" @click="imported(radarApi.importExisting)">导入已有监控快照</Button>
+        <Button variant="outline" type="button" :disabled="busy" @click="imported(radarApi.importExisting, 'imported')">导入已有监控快照</Button>
       </form>
     </CardContent></Card>
 
     <div class="flex flex-wrap items-end justify-between gap-3">
-      <div><h2 class="text-xl font-bold text-slate-900">商品机会排行榜 <span class="ml-2 text-sm font-normal text-slate-500">{{ total }} 个方向</span></h2><p class="mt-1 text-xs text-slate-500">本页 {{ items.length }} 件 · {{ knownMargin }} 件成本已补齐 · {{ demoCount }} 件为合成样例。候选仍需人工验证。</p></div>
+      <div><h2 class="text-xl font-bold text-slate-900">{{ filters.pool === 'all' ? '商品机会排行榜' : '候选验证工作台' }} <span class="ml-2 text-sm font-normal text-slate-500">{{ total }} 个方向</span></h2><p class="mt-1 text-xs text-slate-500">本页 {{ items.length }} 件 · {{ knownMargin }} 件成本已补齐 · {{ demoCount }} 件为合成样例。候选仍需人工验证。</p></div>
       <a :href="radarApi.exportUrl(filters)" class="flex items-center text-sm font-semibold text-teal-700"><Download class="mr-1 h-4 w-4" />导出筛选结果 CSV</a>
     </div>
     <div class="overflow-x-auto rounded-xl border bg-white/90">
@@ -172,9 +185,9 @@ onMounted(async () => {
             <td class="p-4"><span class="text-lg font-bold text-teal-800">{{ item.score.score_total.toFixed(1) }}</span><div class="mt-1 h-1 w-16 rounded bg-slate-100"><div class="h-1 rounded bg-teal-500" :style="{ width: `${item.score.score_total}%` }" /></div></td>
             <td class="p-4 tabular-nums">{{ item.score.confidence_score.toFixed(1) }}<p class="mt-1 text-xs text-slate-400">独立证据评价</p></td>
             <td class="p-4 tabular-nums">{{ format(item.score.profit.net_profit) }}<p class="mt-1 text-xs text-slate-500">净利率 {{ format(item.score.profit.net_margin, '%') }}</p></td>
-            <td class="p-4"><span class="rounded-full px-2 py-1 text-xs" :class="item.score.blockers.length ? 'bg-amber-50 text-amber-900' : 'bg-teal-50 text-teal-800'">{{ item.score.blockers.length ? `${item.score.blockers.length} 项需核验` : '可进入人工验证' }}</span><p v-if="item.experiment_status" class="mt-2 text-xs text-teal-700">已在候选池</p></td>
+            <td class="p-4"><span class="rounded-full px-2 py-1 text-xs" :class="item.score.blockers.length ? 'bg-amber-50 text-amber-900' : 'bg-teal-50 text-teal-800'">{{ item.score.blockers.length ? `${item.score.blockers.length} 项需核验` : '可进入人工验证' }}</span><p v-if="item.experiment_status" class="mt-2 text-xs text-teal-700">{{ poolLabels[item.experiment_status] || item.experiment_status }}</p></td>
           </tr>
-          <tr v-if="!items.length"><td colspan="6" class="px-6 py-16 text-center text-slate-500">{{ loading ? '正在读取 SQLite…' : '暂无符合条件的商品。导入 CSV 或载入合成演示，开始选品。' }}</td></tr>
+          <tr v-if="!items.length"><td colspan="6" class="px-6 py-16 text-center text-slate-500">{{ loading ? '正在读取 SQLite…' : filters.pool === 'all' ? '暂无符合条件的商品。导入 CSV 或载入合成演示，开始选品。' : '暂无符合条件的候选。可先将商品纳入候选池，或调整验证状态及来源筛选。' }}</td></tr>
         </tbody>
       </table>
     </div>
@@ -190,9 +203,11 @@ onMounted(async () => {
         <ul class="list-inside list-disc space-y-1 text-xs leading-5 text-slate-500"><li v-for="warning in selected.score.warnings" :key="warning">{{ warning }}</li></ul>
         <div v-if="selected.suspected_duplicates?.length"><h3 class="font-bold">疑似重复（未合并）</h3><p v-for="d in selected.suspected_duplicates" :key="d.id" class="mt-1 text-xs text-slate-500">#{{ d.id }} {{ d.title }} · 相似度 {{ d.similarity }} · {{ d.basis }}</p></div>
         <form class="space-y-4 border-t pt-4" @submit.prevent="saveCosts"><h3 class="font-bold">计算假设（{{ selected.currency }}）</h3><p class="text-xs text-slate-500">预计净利润 = 预计成交价 − 采购 − 运费 − 平台费用 − 履约 − 损耗。明确为零才填写 0；未知请留空。保存将替换当前假设。</p><div class="grid grid-cols-2 gap-3 sm:grid-cols-3"><label v-for="(label, key) in costLabels" :key="key" class="field">{{ label }}<input v-model="costDraft[key]" type="number" min="0" max="1000000000" step="0.01" placeholder="待补充" /></label></div><div class="grid gap-3 sm:grid-cols-2"><label v-for="(label, key) in evidenceLabels" :key="key" class="field">{{ label }}<textarea v-model="costDraft[key]" rows="2" :maxlength="key === 'evidence_note' ? 2000 : 1000" placeholder="来源、日期、凭据说明（请勿填写账号密钥）" /></label></div><div class="flex flex-wrap gap-3"><Button type="submit" :disabled="busy">保存假设并重新评分</Button><Button variant="outline" type="button" :disabled="busy" @click="addCandidate">{{ selected.experiment_status ? '已在候选池' : '纳入候选池' }}</Button></div><p v-if="error" role="alert" class="text-red-700">{{ error }}</p><p v-if="message" role="status" class="text-teal-700">{{ message }}</p></form>
+        <OpportunityBusinessPanel :item-id="selected.id" :strategy="filters.strategy" :revision="businessRevision" @updated="refreshSelected" />
       </div>
     </DialogContent></Dialog>
 
+    <OpportunityImportDialog v-model:open="importOpen" @imported="importedFile" />
     <Dialog v-model:open="configOpen"><DialogContent class="z-[120] max-h-[90vh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>类目与关键词发现</DialogTitle><DialogDescription>离线规则可用；候选词及队列均有上限，保存后用于后续导入。</DialogDescription></DialogHeader>
       <form class="space-y-3" @submit.prevent="saveCategory"><label class="field">编辑已有类目或新增<select @change="editCategory"><option value="">新增类目</option><option v-for="c in categories" :key="c.name" :value="c.name">{{ c.name }}</option></select></label><div class="grid gap-3 sm:grid-cols-2"><label class="field">类目名称<input v-model="config.name" required maxlength="100" placeholder="例如：户外照明" /></label><label class="field">一级类目<select v-model="config.parent"><option :value="null">设为一级类目</option><option v-for="c in categories.filter(c => !c.parent && c.name !== config.name)" :key="c.name" :value="c.name">{{ c.name }}</option></select></label></div><label class="field">种子词（逗号或换行分隔，最多 30 个）<textarea v-model="seedText" rows="2" /></label><Button :disabled="busy" type="submit">保存类目与种子词</Button></form>
       <div class="space-y-3 border-t pt-4"><div class="grid grid-cols-2 gap-3"><label class="field">广度探索占比（%）<input v-model.number="breadth" type="number" min="0" max="100" /></label><label class="field">本次队列预算（1–50）<input v-model.number="budget" type="number" min="1" max="50" /></label></div><p class="text-xs text-slate-500">默认 40% 广度 / 60% 深挖是启发式配置；队列最多 200 条，仅人工待办，不执行外部采集。</p><div class="flex flex-wrap gap-2"><Button variant="outline" :disabled="busy" @click="act(async () => { const r = await radarApi.expand(); keywords = await radarApi.keywords(); message = `新增 ${r.added} 个候选词，未验证搜索量` })">离线扩展关键词</Button><Button variant="outline" :disabled="busy" @click="act(async () => { const r = await radarApi.plan(budget, breadth / 100); queueSize = r.jobs.length; message = r.note })">生成发现待办</Button></div><p class="text-sm">待办 {{ queueSize }} 条 · 最近 {{ keywords.length }} 个候选词</p><div class="max-h-48 space-y-2 overflow-y-auto"><div v-for="k in keywords.slice(0, 40)" :key="k.id" class="rounded border p-2"><p class="text-sm font-semibold">{{ k.keyword }} <span class="font-normal text-slate-500">· {{ k.category }}</span></p><p class="text-xs text-slate-500">来源 {{ k.origin }} · {{ date(k.discovered_at) }}</p></div></div></div><p v-if="message" role="status" class="text-sm text-teal-700">{{ message }}</p><p v-if="error" role="alert" class="text-sm text-red-700">{{ error }}</p>

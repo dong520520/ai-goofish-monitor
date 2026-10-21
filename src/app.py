@@ -130,7 +130,8 @@ if os.path.exists("dist"):
 @app.get("/health")
 async def health_check():
     """健康检查（无需认证）"""
-    return {"status": "healthy", "message": "服务正常运行"}
+    return {"status": "healthy", "message": "服务正常运行",
+            "application": "ai-goofish-monitor", "opportunity_version": "p2"}
 
 
 # 认证状态检查端点

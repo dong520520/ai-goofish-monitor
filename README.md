@@ -4,6 +4,22 @@
 
 基于 Playwright 和 AI 的闲鱼多任务实时监控，提供完整的 Web 管理界面。
 
+## P2：全类目证据选品与经营验证
+
+在原选品雷达中增加公平类目预算、关键词归一化与来源链路、按来源/币种/成色/型号规格分组的竞品价格分位数、缺失项与独立可信度；可从证据组进入原四策略排行榜及候选池。
+
+准备真实观测时，点击“导入 CSV / 下载模板”下载空白模板，选择文件后先预检新增、重复、币种、缺失及错误行，再确认导入有效行；取消不会保存记录。排行榜新增“候选状态”筛选，可只看待验证、测试中、已完成或已停止的商品，导出保持相同范围并包含实验状态。
+
+商品详情支持人工导入货源报价、明确确认SKU/规格/成色后关联原成本假设，并记录七天自营曝光、咨询、订单、退款及实际净收益，输出继续验证/测试/补证据/停止建议。未知费用不按零计算，合成数据与真实观测分别分析。
+
+准备询价时，在商品详情展开货源面板，下载“该商品询价模板”或空白报价模板。仅预填已有描述、币种和明确记录的身份字段，供应商、SKU/规格、报价时间及费用由实际报价补齐；模板不会把市场挂牌价填成采购成本，也不会自动关联货源。
+
+沿用 FastAPI、Vue、SQLite 和原登录；默认离线，无需 Cookie 或 AI Key。没有新增平台采集、客服、发布或交易执行。[完整用法、API、迁移和实际验证](docs/OPPORTUNITY_P2.md)；[合成报价格式](src/resources/opportunity_supplier_demo.csv)。
+
+Windows本机后台启动：`powershell -ExecutionPolicy Bypass -File .\start-radar.ps1 -Background -OpenBrowser`。重复启动会复用现有进程；更新时用 `-Background -Restart`，会先备份SQLite，再更新服务；`-Stop` 备份并停止。前端源码或构建配置晚于产物时自动重建。访问 [本机选品页面](http://127.0.0.1:8000/opportunities)，页面顶部提供[操作指南](static/opportunity-guide.html)，介绍用途、演示、真实数据导入、货源利润、七天实验和常见问题。
+
+![全类目市场证据与排行榜](docs/screenshots/opportunity-research-p2.png)
+
 ## P1 第一阶段：持续观测与卖家记录
 
 选品雷达现可每60秒从原有 SQLite 监控结果、价格历史中按断点同步，每表每批最多100条；支持暂停、恢复和异常审计，不增加平台请求。
@@ -105,6 +121,8 @@ docker compose up -d
 
 其余配置见下方“配置说明”。
 
+DeepSeek V4.1 Flash 接入：在“系统设置 → AI 模型”填写 `OPENAI_BASE_URL=https://api.deepseek.com`、`OPENAI_MODEL_NAME=deepseek-flash` 及本人 API Key，保存后测试连接。模型名以 [DeepSeek 官方接入说明](https://api-docs.deepseek.com/zh-cn/) 为准。密钥只保存在本机忽略的 `.env`，页面不回显；已有关键词任务不会自动切换为 AI 判断，P2 六维评分继续由确定性规则计算。
+
 
 ### 第一次使用
 
@@ -112,6 +130,8 @@ docker compose up -d
 2. 进入“闲鱼账号管理”，使用 [Chrome 扩展](https://chromewebstore.google.com/detail/xianyu-login-state-extrac/eidlpfjiodpigmfcahkmlenhppfklcoa) 导出并粘贴闲鱼登录态 JSON。
 3. 登录态文件会保存到 `state/` 目录，例如 `state/acc_1.json`。
 4. 回到“任务管理”，创建任务并绑定账号后即可运行。
+
+账号导入会检查 JSON 对象、非空 Cookie 列表及闲鱼域名。若提示“登录态没有 Cookie”，请在已登录的 `www.goofish.com` 标签页重新提取，随后在账号列表点击“更新”；不要在本项目页面提取。已有无效文件会显示提示并保留原文件。格式检查通过不代表平台登录仍有效，首次运行遇到登录验证或访问限制时须停止并人工处理。
 
 ### 创建第一个任务
 
