@@ -129,3 +129,9 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 验证命令：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2-inquiry-complete -q`，247 passed / 3 skipped；`npm run build` 类型检查和生产构建通过。本机候选预筛记录及询价文件留在忽略的 data/ 目录，不提交实际商品信息或凭据。
 
 ![商品询价及空白模板入口（不含实际商品信息）](screenshots/supplier-inquiry-p2.png)
+
+## DeepSeek V4.1 Flash 配置验收（2026-10-21）
+
+复用原 AISettings、设置 API 和 OpenAI 兼容客户端，无新增模型运行时。依 [官方说明](https://api-docs.deepseek.com/zh-cn/) 设置接口 `https://api.deepseek.com`、模型 `deepseek-flash`；密钥仅保存于本机忽略的 `.env`。先备份原环境配置，再保存并重启原服务。重启后 health 正常、设置页显示密钥已配置且不回显，原504件真实观测与5个真实候选保留，采集任务均未运行且仍为关键词模式。
+
+实际完成最小“回复OK”连通测试、原项目设置页/测试API及原AIClient的结构化JSON测试，均通过。测试仅发送合成内容，没有发送真实商品、供应商、账本、登录态或其他业务记录。凭据、环境备份、测试报告和配置实景截图均留在本机，不提交Git。本轮没有修改AI客户端或评分代码，不重跑既有247 passed / 3 skipped的离线套件。

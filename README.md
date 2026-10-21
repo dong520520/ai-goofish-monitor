@@ -121,6 +121,8 @@ docker compose up -d
 
 其余配置见下方“配置说明”。
 
+DeepSeek V4.1 Flash 接入：在“系统设置 → AI 模型”填写 `OPENAI_BASE_URL=https://api.deepseek.com`、`OPENAI_MODEL_NAME=deepseek-flash` 及本人 API Key，保存后测试连接。模型名以 [DeepSeek 官方接入说明](https://api-docs.deepseek.com/zh-cn/) 为准。密钥只保存在本机忽略的 `.env`，页面不回显；已有关键词任务不会自动切换为 AI 判断，P2 六维评分继续由确定性规则计算。
+
 
 ### 第一次使用
 
