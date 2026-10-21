@@ -12,6 +12,8 @@
 
 沿用 FastAPI、Vue、SQLite 和原登录；默认离线，无需 Cookie 或 AI Key。没有新增平台采集、客服、发布或交易执行。[完整用法、API、迁移和实际验证](docs/OPPORTUNITY_P2.md)；[合成报价格式](src/resources/opportunity_supplier_demo.csv)。
 
+Windows本机后台启动：`powershell -ExecutionPolicy Bypass -File .\start-radar.ps1 -Background -OpenBrowser`。重复启动会复用现有进程；更新时用 `-Background -Restart`，会先备份SQLite，再更新服务；`-Stop` 备份并停止。前端源码或构建配置晚于产物时自动重建。访问 [本机选品页面](http://127.0.0.1:8000/opportunities)，页面顶部提供[操作指南](static/opportunity-guide.html)，介绍用途、演示、真实数据导入、货源利润、七天实验和常见问题。
+
 ![全类目市场证据与排行榜](docs/screenshots/opportunity-research-p2.png)
 
 ## P1 第一阶段：持续观测与卖家记录

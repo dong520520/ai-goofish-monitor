@@ -73,3 +73,15 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 - 浏览器验收使用独立的临时SQLite和停用生命周期调度的本地服务，不读写用户业务库、不运行采集任务：20条计划覆盖17类目，重复计划仍20条；报价CSV导入1条，人工关联后原采购成本40、运费6；保存自营合成记录后已录净收益54，完整七天收益仍未知。窄屏完成发现流程、桌面完成货源与实验操作。
 
 ![市场证据与原排行榜](screenshots/opportunity-research-p2.png)
+
+## 本机部署与操作交付（2026-10-21）
+
+`start-radar.ps1` 保留默认前台启动，并增加 `-Background`、`-OpenBrowser`、`-Restart`、`-Stop` 及 `-Port`。后台用隐藏窗口运行单个Uvicorn，监听127.0.0.1；已有本项目同版本健康服务时复用，不重复起服务。停止/重启前核对监听进程属于本检出目录，其他项目占用端口则停止操作；使用SQLite backup接口备份，再停止本项目进程，不删除数据库。前端源码/构建配置更新后会自动重建，日志按时间分文件保存。
+
+健康检查 `/health` 兼容原 `status/message`，新增 `application=ai-goofish-monitor` 和 `opportunity_version=p2` 供启动器确认版本。操作指南为 `/static/opportunity-guide.html`，选品页面顶部可打开，包含完整用途、当前离线/AI边界、演示与实际选品流程、报价与利润、七天实验、启动停止及故障处理。
+
+本机实际运行目录 `D:\项目\咸鱼`，地址 `http://127.0.0.1:8000/opportunities`。新增“闲鱼选品雷达”“闲鱼选品雷达使用指南”“停止闲鱼选品雷达”三个桌面入口。未改动其他旧项目的“闲鱼助手”入口，未设置开机自启。关网页后服务继续运行，关机后下次双击入口重新启动。
+
+部署前已备份 `data/app.sqlite3` 至 `data/backups/app-before-restart-20261021T012526178620Z.sqlite3`。SQLite完整性检查ok，备份与部署后的商品数均40，全部为既有synthetic_demo，未创建真实商品或采集任务。登录、HttpOnly会话、未登录401、Vue静态资源、指南、排行榜、4组演示证据、货源列表、实验详情、重复启动复用进程和原本地定时同步均实际验证。运行信息在 `data/radar-runtime.json`，日志在 `logs/radar-*.log`。
+
+部署变更再次运行后端全量测试：212 passed / 3 skipped（`--basetemp=.test-runs/p2-deployment`），前端 `npm run build` 类型检查及生产构建通过。公网/域名/远程服务器部署和Docker运行不在本次本机部署验收范围。

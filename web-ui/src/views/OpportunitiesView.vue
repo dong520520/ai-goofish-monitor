@@ -131,6 +131,7 @@ onMounted(async () => {
         <p class="mt-2 text-sm text-slate-500">从商品观测发现方向，用证据决定下一步。</p>
       </div>
       <div class="flex flex-wrap gap-2">
+        <a href="/static/opportunity-guide.html" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-md border bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">使用指南</a>
         <Button variant="outline" :disabled="busy" @click="configOpen = true"><SlidersHorizontal class="mr-2 h-4 w-4" />类目与发现</Button>
         <Button variant="outline" :disabled="busy" @click="imported(radarApi.demo)"><FlaskConical class="mr-2 h-4 w-4" />载入合成演示</Button>
         <label class="inline-flex cursor-pointer items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white" :class="busy ? 'pointer-events-none opacity-50' : ''">
