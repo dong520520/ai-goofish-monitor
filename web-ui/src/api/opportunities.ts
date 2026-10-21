@@ -86,6 +86,7 @@ export const radarApi = {
   recordEntry: (id: number, entry: Record<string, unknown>) => http(`${base}/${id}/experiment/entry`, json('PUT', entry)),
   ledgerExportUrl: (id: number) => `${base}/${id}/experiment/export`,
   supplierTemplateUrl: `${base}/suppliers/template`,
+  supplierInquiryUrl: (id?: number) => `${base}/suppliers/template?kind=blank${id === undefined ? '' : `&item_id=${id}`}`,
   research: (category = '', keyword = '', source_scope = 'imported'): Promise<MarketEvidence> => http(`${base}/research`, { params: { category, keyword, source_scope } }),
   researchExportUrl: (category: string, keyword: string, source_scope: string) => `${base}/research/export?${new URLSearchParams({ category, keyword, source_scope })}`,
   history: (id: number): Promise<ObservationHistory> => http(`${base}/${id}/history`),

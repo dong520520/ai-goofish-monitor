@@ -12,6 +12,8 @@
 
 商品详情支持人工导入货源报价、明确确认SKU/规格/成色后关联原成本假设，并记录七天自营曝光、咨询、订单、退款及实际净收益，输出继续验证/测试/补证据/停止建议。未知费用不按零计算，合成数据与真实观测分别分析。
 
+准备询价时，在商品详情展开货源面板，下载“该商品询价模板”或空白报价模板。仅预填已有描述、币种和明确记录的身份字段，供应商、SKU/规格、报价时间及费用由实际报价补齐；模板不会把市场挂牌价填成采购成本，也不会自动关联货源。
+
 沿用 FastAPI、Vue、SQLite 和原登录；默认离线，无需 Cookie 或 AI Key。没有新增平台采集、客服、发布或交易执行。[完整用法、API、迁移和实际验证](docs/OPPORTUNITY_P2.md)；[合成报价格式](src/resources/opportunity_supplier_demo.csv)。
 
 Windows本机后台启动：`powershell -ExecutionPolicy Bypass -File .\start-radar.ps1 -Background -OpenBrowser`。重复启动会复用现有进程；更新时用 `-Background -Restart`，会先备份SQLite，再更新服务；`-Stop` 备份并停止。前端源码或构建配置晚于产物时自动重建。访问 [本机选品页面](http://127.0.0.1:8000/opportunities)，页面顶部提供[操作指南](static/opportunity-guide.html)，介绍用途、演示、真实数据导入、货源利润、七天实验和常见问题。

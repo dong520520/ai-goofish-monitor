@@ -25,6 +25,24 @@ class OpportunityBusinessService:
         self.service = service
         self.repository = service.repository
 
+    def quote_template(self, item_id=None):
+        """Prepare an inquiry, without turning an observed offer into a supplier quote."""
+        fields = list(SupplierQuote.model_fields)
+        rows = []
+        if item_id is not None:
+            with sqlite_connection(self.repository.db_path) as conn:
+                row = conn.execute("SELECT payload_json FROM opportunity_items WHERE id=?", (item_id,)).fetchone()
+            if row is None:
+                raise LookupError("商品不存在")
+            item = OpportunityItem.model_validate_json(row[0])
+            known = {"product": item.title, "currency": item.currency, "condition": item.condition or ""}
+            for field in ("model", "sku", "specification"):
+                value = item.raw_metadata.get(field)
+                if isinstance(value, str) and 0 < len(value.strip()) <= 200:
+                    known[field] = value.strip()
+            rows.append([known.get(field, "") for field in fields])
+        return safe_csv(fields, rows)
+
     def import_quotes(self, content):
         if len(content.encode("utf-8")) > 2_000_000:
             raise ValueError("CSV 最大2MB")

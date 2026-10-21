@@ -214,7 +214,15 @@ def supplier_import(payload: CSVImport, business=Depends(get_business_service)):
 
 
 @router.get("/suppliers/template")
-def supplier_template():
+def supplier_template(kind: Literal["demo","blank"]="demo", item_id: int | None=Query(None,ge=1),
+                      business=Depends(get_business_service)):
+    if kind == "blank":
+        content = business_action(lambda: business.quote_template(item_id))
+        filename = f"supplier-inquiry-item-{item_id}.csv" if item_id is not None else "blank-supplier-template.csv"
+        return Response(content,media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition":f'attachment; filename="{filename}"'})
+    if item_id is not None:
+        raise HTTPException(400,"候选询价模板请使用 kind=blank")
     from pathlib import Path
     content = (Path(__file__).resolve().parents[2]/"resources"/"opportunity_supplier_demo.csv").read_text(encoding="utf-8")
     return Response("\ufeff"+content, media_type="text/csv; charset=utf-8",

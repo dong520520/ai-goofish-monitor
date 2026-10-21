@@ -119,3 +119,13 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 原调度器在每次任务创建/更新时清空所有作业，导致60秒本地同步的计时反复重置；频繁保存任务可能使同步一直推迟。现在仅替换监控任务的定时作业，保留已有本地同步作业及其下次执行时间，首次启动仍只注册一个同步作业。任务禁用、删除和 Cron 变更仍按原逻辑更新，不增加平台调用或后台采集。
 
 新增真实 APScheduler 暂停状态下的离线回归，覆盖启动前重复加载、运行后连续改 Cron、禁用和空任务列表，验证本地同步对象及截止时间保持、监控定时及时变更。原集成用例的假调度器同步更新。全量 `--basetemp=.test-runs/p2-sync-cadence-final -q` 结果：239 passed / 3 skipped。
+
+## 从候选进入真实询价
+
+商品详情的“货源报价与七天经营验证”提供该商品询价模板、空白报价模板及单独标识的合成格式样例。鉴权 `GET /api/opportunities/suppliers/template?kind=blank` 返回 SupplierQuote 合法列的空白表头，追加 `item_id` 时仅预填当前描述、币种、已明确记录的成色及 model/sku/specification；不从标题推断型号、不将市场挂牌价复制到采购价、不把观测时间作为报价时间。供应商、货源出处、报价编号、费用及证据均留空，需据实补齐再导入。未知报价不会入库，不自动关联身份或开启实验。CSV 沿用公式注入保护；下载不修改商品、成本、审计或报价表。
+
+默认 `kind=demo` 保持原合成示例下载契约；不存在的 item_id 返回404，无效类型/范围返回422，demo加item_id返回400，未登录返回401。新增8项集成用例覆盖只填已知、空值、字段兼容、可补齐后导入、鉴权、边界及下载无写入。
+
+验证命令：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2-inquiry-complete -q`，247 passed / 3 skipped；`npm run build` 类型检查和生产构建通过。本机候选预筛记录及询价文件留在忽略的 data/ 目录，不提交实际商品信息或凭据。
+
+![商品询价及空白模板入口（不含实际商品信息）](screenshots/supplier-inquiry-p2.png)
