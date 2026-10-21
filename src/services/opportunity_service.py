@@ -25,6 +25,16 @@ def _reject_json_constant(value):
     raise ValueError("raw_metadata 包含非有限数字：" + value)
 
 
+def classify_item(item, categories):
+    if item.category == "未分类":
+        matches = [(max(len(k) for k in cat["keywords"] if k.casefold() in item.title.casefold()), cat["name"])
+                   for cat in categories if any(k.casefold() in item.title.casefold() for k in cat["keywords"])]
+        if matches:
+            item.category = sorted(matches, key=lambda r: (-r[0], r[1]))[0][1]
+    if item.category not in {c["name"] for c in categories}:
+        raise ValueError("未知类目，请先在类目配置中添加：" + item.category)
+
+
 def parse_csv(content):
     if len(content.encode("utf-8")) > 2_000_000:
         raise ValueError("CSV 最大 2 MB")
@@ -50,7 +60,6 @@ class OpportunityService:
     def import_csv(self, content, *, origin="csv"):
         rows = parse_csv(content)
         categories = self.repository.categories()
-        known = {c["name"] for c in categories}
         accepted, inserted, snapshots, errors = 0, 0, 0, []
         with self.repository.transaction() as conn:
             if conn.execute("SELECT COUNT(*) FROM opportunity_items").fetchone()[0] + len(rows) > MAX_ITEMS:
@@ -69,13 +78,7 @@ class OpportunityService:
                     if "raw_metadata" in payload:
                         payload["raw_metadata"] = json.loads(payload["raw_metadata"], parse_constant=_reject_json_constant)
                     item = OpportunityItem.model_validate(payload)
-                    if item.category == "未分类":
-                        matches = [(max(len(k) for k in cat["keywords"] if k.casefold() in item.title.casefold()), cat["name"])
-                                   for cat in categories if any(k.casefold() in item.title.casefold() for k in cat["keywords"])]
-                        if matches:
-                            item.category = sorted(matches, key=lambda r: (-r[0], r[1]))[0][1]
-                    if item.category not in known:
-                        raise ValueError("未知类目，请先在类目配置中添加：" + item.category)
+                    classify_item(item, categories)
                     cost_fields = {k: v for k, v in row.items() if k in CostAssumptions.model_fields and v is not None and v.strip()}
                     costs = CostAssumptions.model_validate(cost_fields) if cost_fields else None
                     if at_capacity and conn.execute("SELECT COUNT(*) FROM opportunity_items").fetchone()[0] >= MAX_ITEMS:

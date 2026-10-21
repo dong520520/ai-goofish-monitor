@@ -137,3 +137,54 @@ class OpportunityRepository:
                 LEFT JOIN cost_assumptions c ON c.item_id=i.id LEFT JOIN experiments e ON e.item_id=i.id
                 WHERE {where} ORDER BY {columns[sort]} DESC,i.id ASC LIMIT ? OFFSET ?""", params + [limit, (page-1)*limit]).fetchall()
             return {"items": [self.decorate(row) for row in rows], "total": total, "page": page, "limit": limit}
+
+    def history(self, item_id, limit=100):
+        from src.domain.opportunity_history import observation_history
+        with sqlite_connection(self.db_path) as conn:
+            if not conn.execute("SELECT 1 FROM opportunity_items WHERE id=?", (item_id,)).fetchone():
+                return None
+            total = conn.execute("SELECT COUNT(*) FROM opportunity_observations WHERE item_id=?", (item_id,)).fetchone()[0]
+            rows = conn.execute("SELECT id,observed_at,payload_json FROM opportunity_observations WHERE item_id=? ORDER BY observed_at DESC,id DESC LIMIT ?", (item_id, limit)).fetchall()
+            return observation_history([{"id": r["id"], "observed_at": r["observed_at"], "data": json.loads(r["payload_json"])} for r in reversed(rows)], total)
+
+    def sellers(self, *, source_scope="all", page=1, limit=20, watching_only=False):
+        condition = ""
+        if source_scope != "all":
+            condition = " AND i.source='synthetic_demo'" if source_scope == "demo" else " AND i.source<>'synthetic_demo'"
+        query = f"""WITH associations AS (
+            SELECT i.source,json_extract(o.payload_json,'$.seller_id') AS seller_id,i.id,o.observed_at
+            FROM opportunity_items i JOIN opportunity_observations o ON o.item_id=i.id
+            WHERE json_extract(o.payload_json,'$.seller_id') IS NOT NULL
+            AND json_extract(o.payload_json,'$.seller_id')<>'' {condition}
+        ), sellers AS (
+            SELECT source,seller_id,COUNT(DISTINCT id) AS observed_items,MIN(observed_at) AS first_observed_at,
+                MAX(observed_at) AS last_observed_at FROM associations GROUP BY source,seller_id
+        ) SELECT s.*,COALESCE(w.watching,0) AS watching,COALESCE(w.note,'') AS note FROM sellers s
+            LEFT JOIN opportunity_seller_watches w ON w.source=s.source AND w.seller_id=s.seller_id"""
+        if watching_only:
+            query += " WHERE w.watching=1"
+        with sqlite_connection(self.db_path) as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM ({query})").fetchone()[0]
+            rows = conn.execute(query+" ORDER BY last_observed_at DESC,source,seller_id LIMIT ? OFFSET ?", (limit,(page-1)*limit)).fetchall()
+            return {"items": [dict(r) for r in rows], "total": total, "page": page, "limit": limit,
+                "note": "仅列出已观察到稳定ID的卖家及商品关联；不是店铺完整目录或当前在售数量，不发平台请求"}
+
+    def seller_items(self, source, seller_id, *, page=1, limit=20):
+        with sqlite_connection(self.db_path) as conn:
+            params = (source,seller_id)
+            query = """SELECT i.id,i.title,i.source,i.source_item_id,i.currency,
+                MIN(o.observed_at) AS first_associated_at,MAX(o.observed_at) AS last_associated_at
+                FROM opportunity_items i JOIN opportunity_observations o ON o.item_id=i.id
+                WHERE i.source=? AND json_extract(o.payload_json,'$.seller_id')=? GROUP BY i.id"""
+            total = conn.execute(f"SELECT COUNT(*) FROM ({query})",params).fetchone()[0]
+            rows = conn.execute(query+" ORDER BY last_associated_at DESC,i.id LIMIT ? OFFSET ?", params+(limit,(page-1)*limit)).fetchall()
+            return {"items": [dict(r) for r in rows], "total": total, "page": page, "limit": limit}
+
+    def watch_seller(self, source, seller_id, watching, note):
+        with self.transaction() as conn:
+            if not conn.execute("""SELECT 1 FROM opportunity_items i JOIN opportunity_observations o ON i.id=o.item_id
+                WHERE i.source=? AND json_extract(o.payload_json,'$.seller_id')=? LIMIT 1""", (source,seller_id)).fetchone():
+                return False
+            conn.execute("INSERT OR REPLACE INTO opportunity_seller_watches VALUES (?,?,?,?,?)",
+                         (source,seller_id,int(watching),note,datetime.now(timezone.utc).isoformat()))
+        return True

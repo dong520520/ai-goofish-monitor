@@ -74,6 +74,9 @@ class ItemAnalysisDispatcher:
         item_data = record.get("商品信息", {}) or {}
         record["卖家信息"] = await self._load_seller_info(job)
         record["ai_analysis"] = await self._build_analysis_result(job, record)
+        if job.seller_id:
+            # Add provenance after analysis, preserving existing keyword/AI inputs.
+            record["卖家信息"]["卖家ID"] = job.seller_id
         if await self._saver(record, job.keyword):
             self.completed_count += 1
         await self._notify_if_recommended(item_data, record["ai_analysis"])

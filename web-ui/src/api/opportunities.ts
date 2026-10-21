@@ -25,9 +25,37 @@ export interface RadarFilters {
 }
 export interface Ranking { items: Opportunity[]; total: number; page: number; limit: number }
 export interface ImportReport { accepted: number; inserted: number; duplicates: number; new_snapshots: number; rejected: number; errors: { line: number; reason: string }[] }
+export interface ObservationPoint {
+  observation_id: number; observed_at: string; price: string | null; want_count: number | null; view_count: number | null
+  currency: string; title: string; seller_id: string | null; revision_count: number
+  changes: Record<string, number | null>; warnings: string[]
+}
+export interface ObservationHistory {
+  points: ObservationPoint[]; distinct_times: number; total_observations: number; truncated: boolean
+  baseline_only: boolean; price_delta: number | null; note: string
+}
+export interface SyncStatus {
+  enabled: boolean; cursors: Record<string, number>; pending: Record<string, number>; last_run_at: string | null
+  last_error: string | null; rejected_count: number; interval_seconds: number; external_calls: number
+  rejections: { origin: string; row_id: number; reason: string; rejected_at: string }[]
+}
+export interface ObservedSeller {
+  source: string; seller_id: string; observed_items: number; first_observed_at: string; last_observed_at: string; watching: number; note: string
+}
+export interface SellerItem {
+  id: number; title: string; currency: string; source_item_id: string; first_associated_at: string; last_associated_at: string
+}
 const base = '/api/opportunities'
 const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 export const radarApi = {
+  history: (id: number): Promise<ObservationHistory> => http(`${base}/${id}/history`),
+  syncStatus: (): Promise<SyncStatus> => http(`${base}/sync`),
+  configureSync: (enabled: boolean): Promise<SyncStatus> => http(`${base}/sync`, json('PUT', { enabled })),
+  sync: (): Promise<{ processed: number; new_snapshots: number; rejected: number; paused: boolean }> => http(`${base}/sync/run`, { method: 'POST' }),
+  historyDemo: (): Promise<ImportReport> => http(`${base}/demo-history`, { method: 'POST' }),
+  sellers: (page = 1, source_scope = 'all', watching_only = false): Promise<{ items: ObservedSeller[]; total: number; note: string }> => http(`${base}/sellers`, { params: { page, source_scope, watching_only } }),
+  sellerItems: (seller: ObservedSeller): Promise<{ items: SellerItem[]; total: number }> => http(`${base}/sellers/${encodeURIComponent(seller.source)}/${encodeURIComponent(seller.seller_id)}`),
+  watchSeller: (seller: ObservedSeller) => http(`${base}/sellers/${encodeURIComponent(seller.source)}/${encodeURIComponent(seller.seller_id)}/watch`, json('PUT', { watching: !seller.watching, note: seller.note })),
   list: (filters: RadarFilters, page = 1): Promise<Ranking> => http(base, { params: { ...filters, page, limit: 20 } }),
   detail: (id: number, strategy: Strategy): Promise<Opportunity> => http(`${base}/${id}`, { params: { strategy } }),
   categories: (): Promise<Category[]> => http(`${base}/categories`),
