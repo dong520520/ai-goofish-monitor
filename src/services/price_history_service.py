@@ -90,6 +90,7 @@ def _build_snapshot_record(
         "seller": item.get("卖家昵称") or "",
         "publish_time": item.get("发布时间") or "",
         "link": link,
+        "opportunity_metadata": {key: item[key] for key in ("“想要”人数", "浏览量", "卖家ID", "成色") if key in item},
     }
 
 
@@ -131,8 +132,8 @@ def record_market_snapshots(
                 INSERT OR IGNORE INTO price_snapshots (
                     keyword_slug, keyword, task_name, snapshot_time, snapshot_day,
                     run_id, item_id, title, price, price_display, tags_json, region,
-                    seller, publish_time, link
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    seller, publish_time, link, opportunity_metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     keyword_slug,
@@ -150,6 +151,7 @@ def record_market_snapshots(
                     record.get("seller", ""),
                     record.get("publish_time", ""),
                     record.get("link", ""),
+                    json.dumps(record.get("opportunity_metadata", {}), ensure_ascii=False),
                 ),
             )
         conn.commit()

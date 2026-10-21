@@ -20,6 +20,56 @@ class CSVImport(BaseModel):
     content: str = Field(max_length=2_000_000)
 
 
+class SyncConfig(BaseModel):
+    enabled: bool
+
+
+class SellerWatch(BaseModel):
+    watching: bool = True
+    note: str = Field("",max_length=1000)
+
+
+def get_sync_service(service=Depends(get_service)):
+    from src.services.opportunity_sync_service import OpportunitySyncService
+    return OpportunitySyncService(service.repository)
+
+
+@router.get("/sync")
+def sync_status(sync=Depends(get_sync_service)):
+    return sync.status()
+
+
+@router.put("/sync")
+def configure_sync(payload: SyncConfig, sync=Depends(get_sync_service)):
+    return sync.configure(payload.enabled)
+
+
+@router.post("/sync/run")
+def run_sync(sync=Depends(get_sync_service)):
+    try:
+        return sync.run_batch()
+    except Exception as exc:
+        raise HTTPException(503,"本地同步异常，已暂停；请检查状态后恢复") from exc
+
+
+@router.get("/sellers")
+def sellers(source_scope: Literal["all","demo","imported"]="all", page: int=Query(1,ge=1,le=10000),
+            limit: int=Query(20,ge=1,le=100), watching_only: bool=False, service=Depends(get_service)):
+    return service.repository.sellers(source_scope=source_scope,page=page,limit=limit,watching_only=watching_only)
+
+
+@router.get("/sellers/{source}/{seller_id}")
+def seller_items(source: str, seller_id: str, page: int=Query(1,ge=1,le=10000), limit: int=Query(20,ge=1,le=100), service=Depends(get_service)):
+    return service.repository.seller_items(source,seller_id,page=page,limit=limit)
+
+
+@router.put("/sellers/{source}/{seller_id}/watch")
+def watch_seller(source: str, seller_id: str, payload: SellerWatch, service=Depends(get_service)):
+    if not service.repository.watch_seller(source,seller_id,payload.watching,payload.note):
+        raise HTTPException(404,"没有该卖家的可信ID观测")
+    return {"saved":True}
+
+
 def filters(strategy: Strategy = "physical", category: str = Query("", max_length=100), q: str = Query("", max_length=200),
             min_confidence: float = Query(0, ge=0, le=100, allow_inf_nan=False),
             min_margin: float | None = Query(None, ge=-1000000, le=100, allow_inf_nan=False),
@@ -45,6 +95,13 @@ def import_csv(payload: CSVImport, service=Depends(get_service)):
 @router.post("/demo")
 def demo(service=Depends(get_service)):
     return service.demo()
+
+
+@router.post("/demo-history")
+def history_demo(service=Depends(get_service)):
+    from pathlib import Path
+    content = (Path(__file__).resolve().parents[2]/"resources"/"opportunity_history_demo.csv").read_text(encoding="utf-8-sig")
+    return service.import_csv(content,origin="synthetic_history_demo")
 
 
 @router.post("/import-existing")
@@ -110,6 +167,14 @@ def detail(item_id: int, strategy: Strategy = "physical", service=Depends(get_se
     if item is None:
         raise HTTPException(404, "商品不存在")
     return item
+
+
+@router.get("/{item_id}/history")
+def history(item_id: int, limit: int=Query(100,ge=1,le=500), service=Depends(get_service)):
+    result = service.repository.history(item_id,limit)
+    if result is None:
+        raise HTTPException(404,"商品不存在")
+    return result
 
 
 @router.put("/{item_id}/costs")

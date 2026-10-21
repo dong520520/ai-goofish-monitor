@@ -3,6 +3,8 @@
 负责管理定时任务的调度
 """
 from datetime import datetime
+import asyncio
+import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import List
 
@@ -53,6 +55,11 @@ class SchedulerService:
         """重新加载所有定时任务"""
         print("正在重新加载定时任务...")
         self.scheduler.remove_all_jobs()
+        self.scheduler.add_job(
+            self._sync_opportunity_records, "interval", seconds=60,
+            id="opportunity_local_sync", name="Opportunity: local SQLite sync",
+            max_instances=1, coalesce=True, replace_existing=True,
+        )
 
         for task in tasks:
             if task.enabled and task.cron:
@@ -74,6 +81,13 @@ class SchedulerService:
                     print(f"  -> [警告] 任务 '{task.task_name}' 的 Cron 表达式无效: {e}")
 
         print("定时任务加载完成")
+
+    async def _sync_opportunity_records(self):
+        from src.services.opportunity_sync_service import OpportunitySyncService
+        try:
+            await asyncio.to_thread(lambda: OpportunitySyncService().run_batch())
+        except Exception:
+            logging.getLogger(__name__).exception("选品本地同步异常，已暂停；原监控任务继续独立运行")
 
     async def _run_task(self, task_id: int, task_name: str):
         """执行定时任务"""

@@ -5,6 +5,8 @@ import { radarApi, type Category, type ImportReport, type Keyword, type Opportun
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import OpportunityHistoryPanel from '@/components/results/OpportunityHistoryPanel.vue'
+import OpportunityMonitorPanel from '@/components/results/OpportunityMonitorPanel.vue'
 
 const modes: { key: Strategy; label: string; note: string }[] = [
   { key: 'physical', label: '实物选品', note: '采购、运费、履约与售后' },
@@ -53,7 +55,7 @@ async function upload(event: Event) {
   await imported(() => file.text().then(radarApi.importCSV))
   input.value = ''
 }
-async function openItem(item: Opportunity) {
+async function openItem(item: { id: number }) {
   await act(async () => {
     selected.value = await radarApi.detail(item.id, filters.strategy)
     costDraft.value = { ...selected.value.costs }
@@ -113,7 +115,7 @@ onMounted(async () => {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P0</p>
+        <p class="text-xs font-bold uppercase tracking-[.25em] text-teal-700">Xianyu Opportunity AI · P1</p>
         <h1 class="mt-2 flex items-center gap-2 text-3xl font-bold tracking-tight text-slate-900"><Radar class="h-7 w-7 text-teal-600" />选品雷达</h1>
         <p class="mt-2 text-sm text-slate-500">从商品观测发现方向，用证据决定下一步。</p>
       </div>
@@ -129,6 +131,7 @@ onMounted(async () => {
     <div class="rounded-xl border border-teal-200 bg-teal-50/80 px-5 py-4 text-sm leading-6 text-teal-900">
       <strong>本地证据工作台</strong> · 无需闲鱼 Cookie 或 AI Key。想要数、浏览量与报价均不代表真实销量或成交价；利润来自你填写的成本假设。演示数据明确标识为合成样例。
     </div>
+    <OpportunityMonitorPanel @updated="load()" @open-item="id => openItem({ id })" />
     <p v-if="error" role="alert" class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ message }}</p>
     <div v-if="report" role="status" class="rounded-lg border bg-white p-4 text-sm">
@@ -179,7 +182,8 @@ onMounted(async () => {
 
     <Dialog v-model:open="detailOpen"><DialogContent class="z-[120] max-h-[90vh] overflow-y-auto sm:max-w-3xl" @open-auto-focus="focusDetails">
       <DialogHeader><DialogTitle>{{ selected?.title }}</DialogTitle><DialogDescription>评分依据、未知项与成本假设；全部可追溯到本地观测。</DialogDescription></DialogHeader>
-      <div v-if="selected" class="space-y-5 text-sm">
+      <div v-if="selected" class="min-w-0 space-y-5 text-sm">
+        <OpportunityHistoryPanel :item-id="selected.id" />
         <div class="grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2"><p>来源：{{ selected.source }} / {{ selected.source_item_id }}</p><p>最新观察：{{ date(selected.observed_at) }}</p><p>首次观察：{{ date(selected.first_observed_at) }}</p><p>真实发布时间：{{ selected.listing_created_at ? date(selected.listing_created_at) : '未知' }}</p><p>有效快照 {{ selected.observation_count }} 个；{{ selected.baseline_only ? '仅观察基线' : '多次记录，未推断成交' }}</p><a v-if="selected.url" :href="selected.url" target="_blank" rel="noopener noreferrer" class="text-teal-700 underline">{{ selected.score.is_demo ? '合成占位链接（不可访问）' : '打开来源链接' }}</a><p>想要 {{ selected.want_count ?? '未知' }} / 浏览 {{ selected.view_count ?? '未知' }}</p><p>本地报价区间 {{ format(selected.score.market.price_low) }}–{{ format(selected.score.market.price_high) }} {{ selected.currency }}（{{ selected.score.market.sample_count }} 条）</p></div>
         <div><h3 class="mb-3 font-bold">评分 {{ selected.score.score_total }} · 可信度 {{ selected.score.confidence_score }}</h3><div class="grid gap-3 sm:grid-cols-2"><div v-for="(d, key) in selected.score.dimensions" :key="key" class="rounded-lg border p-3"><div class="flex justify-between font-semibold"><span>{{ dimensionLabels[key] }}</span><span>{{ d.score }} × {{ d.weight }}%</span></div><p class="mt-2 text-xs leading-5 text-slate-500">{{ d.evidence }}</p></div></div><p class="mt-3 text-xs text-slate-500">可信度依据：来源系数 {{ selected.score.confidence_basis.source_confidence }} × 覆盖率 {{ selected.score.confidence_basis.coverage }} × 时效 {{ selected.score.confidence_basis.freshness_factor }}；合成样例最高 20 分。</p></div>
         <div class="rounded-lg bg-amber-50 p-4 text-amber-900"><h3 class="font-bold">风险与待补充</h3><ul class="mt-2 list-inside list-disc space-y-1"><li v-for="b in selected.score.blockers" :key="b">{{ b }}</li></ul><p class="mt-2 break-words text-xs">缺失字段：{{ selected.score.missing.join('、') || '当前规则字段已填写，仍需人工验证' }}</p></div>

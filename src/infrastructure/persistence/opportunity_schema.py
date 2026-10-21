@@ -35,6 +35,13 @@ STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_opportunity_category ON opportunity_items(category, source, currency)",
     "CREATE INDEX IF NOT EXISTS idx_opportunity_ranking ON opportunity_scores(strategy, score_total DESC, item_id)",
     "CREATE INDEX IF NOT EXISTS idx_opportunity_observation_time ON opportunity_observations(item_id, observed_at)",
+    "CREATE INDEX IF NOT EXISTS idx_opportunity_observation_seller ON opportunity_observations(json_extract(payload_json,'$.seller_id'),item_id,observed_at)",
+    """CREATE TABLE IF NOT EXISTS opportunity_sync_rejections (
+        origin TEXT NOT NULL, row_id INTEGER NOT NULL, reason TEXT NOT NULL, rejected_at TEXT NOT NULL,
+        PRIMARY KEY(origin,row_id))""",
+    """CREATE TABLE IF NOT EXISTS opportunity_seller_watches (
+        source TEXT NOT NULL, seller_id TEXT NOT NULL, watching INTEGER NOT NULL,
+        note TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL, PRIMARY KEY(source,seller_id))""",
 )
 
 DEFAULT_CATEGORIES = {
@@ -52,6 +59,10 @@ DEFAULT_CATEGORIES = {
 def init_opportunity_schema(conn):
     for statement in STATEMENTS:
         conn.execute(statement)
+    # Preserve bounded interest evidence with each future original price snapshot.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(price_snapshots)")}
+    if "opportunity_metadata_json" not in columns:
+        conn.execute("ALTER TABLE price_snapshots ADD COLUMN opportunity_metadata_json TEXT NOT NULL DEFAULT '{}'")
     conn.execute("INSERT OR IGNORE INTO categories VALUES ('未分类', NULL, '[]')")
     # Seed once: user-edited categories/keywords are never overwritten on startup.
     if conn.execute("SELECT 1 FROM app_metadata WHERE key='migration:opportunities_v1'").fetchone():

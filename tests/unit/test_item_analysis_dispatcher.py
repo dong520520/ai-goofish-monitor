@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 
 from src.services.item_analysis_dispatcher import (
     ItemAnalysisDispatcher,
@@ -107,8 +108,7 @@ def test_item_analysis_dispatcher_supports_keyword_mode_without_ai():
             notifier=notifier,
             saver=saver,
         )
-        dispatcher.submit(
-            ItemAnalysisJob(
+        job = ItemAnalysisJob(
                 keyword="demo",
                 task_name="Demo",
                 decision_mode="keyword",
@@ -122,10 +122,13 @@ def test_item_analysis_dispatcher_supports_keyword_mode_without_ai():
                 seller_id="seller-1",
                 zhima_credit_text="优秀",
                 registration_duration_text="来闲鱼1年",
-            )
         )
+        dispatcher.submit(job)
+        dispatcher.submit(replace(job,keyword_rules=("seller-1",)))
         await dispatcher.join()
 
     asyncio.run(run())
     assert saved_records[0]["ai_analysis"]["analysis_source"] == "keyword"
     assert saved_records[0]["ai_analysis"]["is_recommended"] is True
+    assert saved_records[0]["卖家信息"]["卖家ID"] == "seller-1"
+    assert saved_records[1]["ai_analysis"]["is_recommended"] is False
