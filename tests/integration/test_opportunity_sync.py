@@ -233,10 +233,16 @@ def test_seller_source_isolation_and_api_auth(context):
 
 def test_scheduler_registers_sync_after_every_task_reload(monkeypatch):
     from src.services.scheduler_service import SchedulerService
+    from types import SimpleNamespace
     calls = []
     class FakeScheduler:
-        def remove_all_jobs(self):calls.clear()
-        def add_job(self,*args,**kwargs):calls.append((args,kwargs))
+        def __init__(self):self.jobs = {}
+        def get_jobs(self):return list(self.jobs.values())
+        def get_job(self,job_id):return self.jobs.get(job_id)
+        def remove_job(self,job_id):self.jobs.pop(job_id)
+        def add_job(self,*args,**kwargs):
+            calls.append((args,kwargs))
+            self.jobs[kwargs["id"]] = SimpleNamespace(id=kwargs["id"])
     scheduler = SchedulerService(object())
     scheduler.scheduler = FakeScheduler()
     asyncio.run(scheduler.reload_jobs([]));asyncio.run(scheduler.reload_jobs([]))

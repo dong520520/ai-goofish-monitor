@@ -113,3 +113,9 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 本轮验证：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2-account-preflight -q`，238 passed / 3 skipped；`npm run build` 通过。新增13项离线账号用例，覆盖标准/扩展格式、空 Cookie、其他站点、错误对象、失败更新保护、旧文件提示和凭据不回显。本机更新后 health 正常，17个首批任务均禁用、未运行且无定时；原40件演示商品与120条观测保留，无平台请求。
 
 ![空登录态修复提示（截取提示与操作区域，不含账号名称）](screenshots/account-state-preflight-p2.png)
+
+## 连续任务验证时的同步节奏修复
+
+原调度器在每次任务创建/更新时清空所有作业，导致60秒本地同步的计时反复重置；频繁保存任务可能使同步一直推迟。现在仅替换监控任务的定时作业，保留已有本地同步作业及其下次执行时间，首次启动仍只注册一个同步作业。任务禁用、删除和 Cron 变更仍按原逻辑更新，不增加平台调用或后台采集。
+
+新增真实 APScheduler 暂停状态下的离线回归，覆盖启动前重复加载、运行后连续改 Cron、禁用和空任务列表，验证本地同步对象及截止时间保持、监控定时及时变更。原集成用例的假调度器同步更新。全量 `--basetemp=.test-runs/p2-sync-cadence-final -q` 结果：239 passed / 3 skipped。
