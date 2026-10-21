@@ -8,6 +8,7 @@ import aiofiles
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
+from urllib.parse import urlsplit
 from src.infrastructure.config.env_manager import env_manager
 
 
@@ -56,9 +57,40 @@ def _account_path(name: str) -> str:
 
 def _validate_json(content: str) -> None:
     try:
-        json.loads(content)
+        snapshot = json.loads(content)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="提供的内容不是有效的JSON格式。")
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=400, detail="登录态必须是扩展导出的 JSON 对象。")
+    cookies = snapshot.get("cookies")
+    if not isinstance(cookies, list) or not cookies:
+        raise HTTPException(status_code=400, detail="登录态没有 Cookie。请在已登录的 www.goofish.com 标签页重新提取，再更新账号；不要在本项目页面提取。")
+    has_goofish_cookie = False
+    for cookie in cookies:
+        if not isinstance(cookie, dict) or not isinstance(cookie.get("name"), str) or not isinstance(cookie.get("value"), str):
+            raise HTTPException(status_code=400, detail="Cookie 格式不完整，请使用登录态提取扩展重新导出。")
+        domain = str(cookie.get("domain") or "").lstrip(".").lower()
+        if not domain:
+            try:
+                domain = urlsplit(str(cookie.get("url") or "")).hostname or ""
+            except ValueError:
+                domain = ""
+        if cookie["name"] and cookie["value"] and (domain == "goofish.com" or domain.endswith(".goofish.com")):
+            has_goofish_cookie = True
+    if not has_goofish_cookie:
+        raise HTTPException(status_code=400, detail="没有找到闲鱼站点的 Cookie。请确认在已登录的 www.goofish.com 标签页提取。")
+
+
+async def _state_status(path: str) -> dict:
+    """Offline structure check only; never return credential contents or probe the site."""
+    try:
+        async with aiofiles.open(path, "r", encoding="utf-8") as handle:
+            _validate_json(await handle.read())
+    except HTTPException as exc:
+        return {"state_status": "invalid", "state_message": exc.detail}
+    except (OSError, UnicodeError):
+        return {"state_status": "invalid", "state_message": "登录态文件无法读取，请重新导入。"}
+    return {"state_status": "unchecked", "state_message": "登录态格式检查通过；是否仍有效，需首次运行验证。"}
 
 
 @router.get("", response_model=List[dict])
@@ -73,6 +105,7 @@ async def list_accounts():
         accounts.append({
             "name": name,
             "path": os.path.join(state_dir, filename),
+            **await _state_status(os.path.join(state_dir, filename)),
         })
     return accounts
 

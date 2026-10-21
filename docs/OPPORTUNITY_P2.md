@@ -103,3 +103,13 @@ P2B由原 `init_opportunity_schema` 幂等添加 `opportunity_supplier_quotes`�
 实际本机页面验证：既有合成CSV预检为41条有效、1条错误、预计新增商品与快照均0；预检前后商品、快照、成本及导入记录数量一致。窄屏弹窗溢出已修正，取消返回原页面；整个候选池筛选正确显示既有候选并将pool条件传至CSV导出。没有导入真实商品或发起平台请求，真实选品仍需用户提供有权使用的输入。
 
 ![导入前预检（窄屏）](screenshots/opportunity-import-preview-p2.png)
+
+## 真实账号接入前检查
+
+沿用原账号管理和任务管理。账号创建/更新会拒绝非对象 JSON、空或错误类型的 Cookie 列表、缺少名称/值的 Cookie，以及没有闲鱼域名 Cookie 的文件；错误不回显凭据，失败更新不覆盖已有文件。账号列表仅增加 `state_status` 和 `state_message` 摘要，不返回 Cookie。已有空/损坏文件会显示修复提示并保留原文件。离线格式检查通过仍标记为 `unchecked`，不等于平台登录有效；没有为格式检查发起平台请求。
+
+全类目首批应按现有子类目各取一个种子、单页、固定本人账号、关键词模式、不设定时。先验证登录与首个任务，再依次运行其余类目；无可用登录态时保持任务禁用。真实结果沿用 P1 本地 SQLite 同步进入真实来源范围，未知字段和利润继续保持未知。
+
+本轮验证：`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/Scripts/python -m pytest --basetemp=.test-runs/p2-account-preflight -q`，238 passed / 3 skipped；`npm run build` 通过。新增13项离线账号用例，覆盖标准/扩展格式、空 Cookie、其他站点、错误对象、失败更新保护、旧文件提示和凭据不回显。本机更新后 health 正常，17个首批任务均禁用、未运行且无定时；原40件演示商品与120条观测保留，无平台请求。
+
+![空登录态修复提示（截取提示与操作区域，不含账号名称）](screenshots/account-state-preflight-p2.png)

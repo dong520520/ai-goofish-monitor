@@ -3,6 +3,8 @@ import { http } from '@/lib/http'
 export interface AccountItem {
   name: string
   path: string
+  state_status?: 'invalid' | 'unchecked'
+  state_message?: string
 }
 
 export interface AccountDetail extends AccountItem {
